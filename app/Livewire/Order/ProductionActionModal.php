@@ -485,7 +485,16 @@ class ProductionActionModal extends Component
                 } else {
                     try {
                         $changedBy = auth()->user()?->name ?? 'Sistema';
-                        $luminariaNombre = $order->luminaria ?? ($order->producto ?? null);
+                        //$luminariaNombre = $order->luminaria ?? ($order->producto ?? null);
+                        // 🔥 CAMBIO AQUÍ — Convertir JSON de luminarias en texto legible
+                        $luminarias = json_decode($order->luminaria, true);
+
+                        if (!is_array($luminarias)) {
+                            $luminarias = [$order->luminaria]; // fallback si llega texto suelto
+                        }
+
+                        // Texto final: “A, B, C”
+                        $luminariaNombre = implode(', ', $luminarias);
 
                         \Log::info('Enviando notificación de estado...', [
                             'order_id' => $order->id_production_order,
