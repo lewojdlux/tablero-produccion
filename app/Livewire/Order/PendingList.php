@@ -431,91 +431,91 @@ class PendingList extends Component
         }
     }*/
 
-public function enqueue(int|string $ndoc, string $producto, ProductionRepository $repo, ProductionOrderRepository $poRepo, ?string $observacion = null): void
-        {
-            try {
+    public function enqueue(int|string $ndoc, string|array $productos, ProductionRepository $repo, ProductionOrderRepository $poRepo, ?string $observacion = null): void
+    {
+        try {
+            // Asegurar array
+            $productos = is_array($productos) ? $productos : [$productos];
+
+            $tickets = [];
+
+            // Procesar cada producto individualmente
+            foreach ($productos as $producto) {
                 $result = $repo->enqueueFromErp($ndoc, $producto);
 
-                // Si el repo devuelve un modelo, guarda la observación
                 if (!empty($observacion) && isset($result['model']->id_production_order)) {
                     \DB::table('production_orders')
                         ->where('id_production_order', $result['model']->id_production_order)
                         ->update(['obsv_production_order' => $observacion]);
                 }
 
-                // Refresca índice y tabla de producción
-                $this->poIndex  = collect($poRepo->getOrdersBasicInfo())->keyBy('pedido')->toArray();
-                $this->prodRows = $poRepo->getOrdersForTable($this->prodFilters());
+                // Guardar tickets para el correo
+                $tickets[] = $result['model']->ticket_code ?? '—';
 
-                // Quita de la tabla local
-                $pedidoToRemove = null;
-                foreach ($this->rows as $row) {
-                    if (($row['Ndocumento'] ?? null) == $ndoc && ($row['Luminaria'] ?? null) === $producto) {
-                        $pedidoToRemove = $row['Pedido'] ?? null;
-                        break;
-                    }
-                }
-                if ($pedidoToRemove !== null) {
-                    $this->rows = array_values(array_filter($this->rows, fn($r) => ($r['Pedido'] ?? null) !== $pedidoToRemove));
-                }
-
-
-                // --- 📨 Enviar correo ---
-                $ticket = $result['model']->ticket_code ?? '—';
-                $estado = $result['status'] === 'created' ? 'creada' : 'ya existente';
-                $asunto = "Nueva OP {$estado}: {$ticket}";
-                $mensaje = "
-                    Se ha {$estado} una nueva Orden de Producción en el sistema.<br><br>
-                    <b>Ticket:</b> {$ticket}<br>
-                    <b>Pedido ERP:</b> {$ndoc}<br>
-                    <b>Producto:</b> {$producto}<br>
-                    <b>Observación:</b> {$observacion}<br>
-                    <br>
-                    Este mensaje fue generado automáticamente desde el sistema de producción D-LUX.
-                ";
-
-                try {
-                    Mail::html($mensaje, function ($msg) use ($asunto) {
-                        $msg->to('produccion1@dlux.com.co')
-                            ->subject($asunto)
-                            ->from('no-reply@dlux.com.co', 'Sistema Producción D-LUX');
-                    });
-                } catch (\Throwable $mailError) {
-                    report($mailError);
-                }
-
-
-
-                // --- Notificación visual ---
-                if ($result['status'] === 'created') {
-                    $this->dispatch('toast', type: 'success', message: 'OP encolada: '.$result['model']->ticket_code);
-                } else {
-                    $this->dispatch('toast', type: 'info', message: 'Ya existía en producción: '.$result['model']->ticket_code);
-                }
-            } catch (\Throwable $e) {
-                report($e);
-                $this->dispatch('toast', type: 'error', message: 'No se pudo encolar la OP.');
+                // Quitar de la tabla local
+                $this->rows = array_values(
+                    array_filter($this->rows, function ($r) use ($ndoc, $producto) {
+                        return !(($r['Ndocumento'] ?? null) == $ndoc && ($r['Luminaria'] ?? null) === $producto);
+                    }),
+                );
             }
+
+            // Refrescar UI
+            $this->poIndex = collect($poRepo->getOrdersBasicInfo())->keyBy('pedido')->toArray();
+            $this->prodRows = $poRepo->getOrdersForTable($this->prodFilters());
+
+            // ----------------------------
+            //  ARMAR LISTA DE PRODUCTOS
+            // ----------------------------
+            $luminarias = json_decode($result['model']->luminaria, true);
+
+
+            $listaProductos = "<ul style='margin:0;padding-left:18px;'>";
+            foreach ($luminarias ?? [] as $p) {
+                $listaProductos .= '<li>' . e($p) . '</li>';
+            }
+            $listaProductos .= '</ul>';
+
+            // Lista de tickets
+            $listaTickets = implode(', ', $tickets);
+
+            // ----------------------------
+            //  CORREO
+            // ----------------------------
+            $asunto = "Nuevas OP procesadas: {$listaTickets}";
+
+            $mensaje = "
+            Se han procesado las siguientes Órdenes de Producción:<br><br>
+
+            <b>Pedido ERP:</b> {$ndoc}<br>
+            <b>Tickets:</b> {$listaTickets}<br>
+            <b>Productos:</b><br>
+            {$listaProductos}
+            <br>
+            <b>Observación:</b> {$observacion}<br><br>
+
+            Este mensaje fue generado automáticamente desde el sistema de producción D-LUX.
+        ";
+
+            Mail::html($mensaje, function ($msg) use ($asunto) {
+                $msg->to('sistemas1@dlux.com.co')->subject($asunto)->from('no-reply@dlux.com.co', 'Sistema Producción D-LUX');
+            });
+
+            // Notificación
+            $this->dispatch('toast', type: 'success', message: 'Pedido enviado a producción correctamente.');
+        } catch (\Throwable $e) {
+            report($e);
+            $this->dispatch('toast', type: 'error', message: 'No se pudo encolar la OP.');
         }
+    }
 
+    public function confirmObservation()
+    {
+        $this->enqueue($this->ndocTemp, $this->productoTemp, app(\App\Repository\ProductionRepository::class), app(\App\Repository\ProductionOrderRepository::class), trim($this->observationText) ?: null);
 
-        public function confirmObservation()
-        {
-           
+        $this->dispatch('ui:hide-observation-pendientes');
+        $this->showObservationModal = false;
 
-                $this->enqueue(
-                $this->ndocTemp, 
-                $this->productoTemp, 
-                app(\App\Repository\ProductionRepository::class), 
-                app(\App\Repository\ProductionOrderRepository::class), 
-                trim($this->observationText) ?: null);
-
-                $this->dispatch('ui:hide-observation-pendientes');
-                $this->showObservationModal = false;
-
-            
-                $this->dispatch('toast', type: 'success', message: 'Pedido enviado a producción correctamente.');
-              
-            
-        }
+        $this->dispatch('toast', type: 'success', message: 'Pedido enviado a producción correctamente.');
+    }
 }

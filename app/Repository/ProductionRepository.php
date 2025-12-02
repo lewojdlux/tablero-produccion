@@ -306,45 +306,72 @@ class ProductionRepository
     /** Crea la OP local (si no existe) desde la fuente ERP por OP + producto */
     public function enqueueFromErp(int|string $op, string $producto): array
     {
+        // OBTIENE TODAS LAS LÍNEAS DEL PEDIDO (no filtra por producto porque está comentado)
         $data = $this->getOrderDetail($op, $producto);
 
         if (empty($data['header'])) {
-            throw new \RuntimeException("No se encontró detalle en ERP para OP {$op} y producto {$producto}");
+            throw new \RuntimeException("No se encontró detalle en ERP para la OP {$op}");
         }
 
-        // Tomamos la primera línea (ya filtraste por producto)
-        $line = $data['lines'][0] ?? null;
-        if (!$line) {
-            throw new \RuntimeException("No hay líneas para el producto {$producto} en la OP {$op}");
+        if (empty($data['lines'])) {
+            throw new \RuntimeException("El pedido {$op} no tiene líneas");
         }
 
-        // Aplanar: header + line => array con llaves Ndocumento, Luminaria, etc.
-        $r = array_merge($data['header'], $line);
+        $result = null;
 
-        // Llama al método protegido desde dentro de la misma clase (sí se puede)
-        return $this->storeQueued($r);
+        // *** ESTA ES LA PARTE NUEVA ***
+        foreach ($data['lines'] as $line) {
+            // header + line
+            $r = array_merge($data['header'], $line);
+
+            // acá se hace el merge de todas las luminarias en JSON
+            $result = $this->storeQueued($r);
+        }
+
+        return $result;
     }
 
     /** Inserta si no existe (OP + Luminaria únicos). Devuelve ['status' => created|exists, 'model' => ProductionOrder] */
     protected function storeQueued(array $r): array
     {
         return DB::transaction(function () use ($r) {
-            // Buscar si ya existe la misma línea (OP + producto)
-            $existing = ProductionOrder::where('n_documento', $r['Ndocumento'])->where('luminaria', $r['Luminaria'])->first();
+            // Buscar OP del documento (sin comparar luminaria)
+            $existing = ProductionOrder::where('n_documento', $r['Ndocumento'])->first();
 
             if ($existing) {
-                return ['status' => 'exists', 'model' => $existing];
+                // Decodificar luminarias existentes
+                $current = json_decode($existing->luminaria, true);
+
+                // Si aún no es array, inicializar
+                if (!is_array($current)) {
+                    $current = [];
+                }
+
+                // Agregar luminaria si no está repetida
+                if (!in_array($r['Luminaria'], $current)) {
+                    $current[] = $r['Luminaria'];
+
+                    $existing->update([
+                        'luminaria' => json_encode($current, JSON_UNESCAPED_UNICODE),
+                    ]);
+                }
+
+                return ['status' => 'updated', 'model' => $existing];
             }
 
+            // Crear OP nueva con luminaria como array JSON
             $po = ProductionOrder::create([
-                'ticket_code' => $this->nextTicketCode(), // ej. 250829-0007
+                'ticket_code' => $this->nextTicketCode(),
                 'tipo_transaccion' => $r['TipoTransaccion'] ?? null,
                 'n_documento' => $r['Ndocumento'],
                 'pedido' => $r['Pedido'] ?? null,
                 'tercero' => $r['Tercero'] ?? null,
                 'vendedor' => $r['Vendedor'] ?? null,
                 'vendedor_username' => $r['VendedorUsername'] ?? null,
-                'luminaria' => $r['Luminaria'],
+
+                // Guardar luminaria en formato JSON (múltiples)
+                'luminaria' => json_encode([$r['Luminaria']], JSON_UNESCAPED_UNICODE),
+
                 'observaciones' => $r['Observaciones'] ?? null,
                 'periodo' => $r['Periodo'] ?? null,
                 'ano' => $r['Ano'] ?? null,
@@ -352,8 +379,8 @@ class ProductionRepository
                 'estado_factura' => $r['EstadoFactura'] ?? null,
                 'n_factura' => $r['NFactura'] ?? null,
 
-                'status' => 'queued', // ← empieza en cola
-                'queued_at' => now(), // marca en cola
+                'status' => 'queued',
+                'queued_at' => now(),
             ]);
 
             return ['status' => 'created', 'model' => $po];
@@ -659,7 +686,6 @@ class ProductionRepository
         return ['header' => $header, 'lines' => $lines];
     }
 
-
     public function getOrderDetailFichaProducto(string|int $ndoc, ?string $producto = null): array
     {
         $conn = \DB::connection('sqlsrv');
@@ -733,5 +759,4 @@ class ProductionRepository
 
         return ['header' => $hdr, 'lines' => $lines];
     }
-
 }
