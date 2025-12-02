@@ -1,0 +1,55 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class PedidoMaterialModel extends Model
+{
+    //
+    protected $table = 'pedidos_materiales';
+    protected $primaryKey = 'id_pedido_material';
+    public $timestamps = true;
+
+    // Campos asignables en masa
+    protected $fillable = [
+        'orden_trabajo_id',
+        'instalador_id',
+        'fecha_solicitud',
+        'status',
+        'fecha_aprobacion',
+        'observaciones',
+        'fecha_registro',
+        'ref_id_usuario_registro',
+        'fecha_modificacion',
+        'ref_id_usuario_modificacion'
+    ];
+
+    // Ocultar campos al convertir a array o JSON
+    protected $hidden = [
+        'created_at',
+        'updated_at'
+    ];
+
+
+    // Si deseas manejar los tipos de datos automáticamente
+    protected $casts = [
+        'cantidad' => 'integer',
+        'precio_unitario' => 'float'
+    ];
+
+    // Si deseas manejar las fechas automáticamente
+    protected $dates = [
+        'created_at',
+        'updated_at'
+    ];
+
+
+
+    public function ordenTrabajo()
+    {
+        return $this->belongsTo(OrderWorkModel::class, 'orden_trabajo_id', 'id_work_order');
+    }
+
+   
+}
