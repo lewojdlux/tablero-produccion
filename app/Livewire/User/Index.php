@@ -2,6 +2,7 @@
 
 namespace App\Livewire\User;
 
+use App\Models\InstaladorModel;
 use App\Models\User;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\On;
@@ -11,7 +12,6 @@ use Livewire\Attributes\Layout;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-
 
 class Index extends Component
 {
@@ -32,6 +32,8 @@ class Index extends Component
     public int $perfil_usuario_id = 2;
     public bool $estado = true;
     public ?string $identificador_asesor = null;
+    public ?string $identificador_instalador = null;
+    public ?int $perfilInstaladorId = null;
     public ?int $perfilAsesorId = null;
 
     public string $password = '';
@@ -52,29 +54,58 @@ class Index extends Component
         });
 
         $this->perfilAsesorId = $asesor ? (int) (is_array($asesor) ? $asesor['id_perfil_usuario'] : $asesor->id_perfil_usuario) : null; // si no existe, nunca mostrará el campo
+
+        // Detecta INSTALADOR
+        $instalador = collect($this->perfiles)->first(function ($p) {
+            $nombre = is_array($p) ? $p['nombre_perfil'] ?? '' : $p->nombre_perfil ?? '';
+            return mb_strtolower($nombre) === 'instalador';
+        });
+        $this->perfilInstaladorId = $instalador ? (int) (is_array($instalador) ? $instalador['id_perfil_usuario'] : $instalador->id_perfil_usuario) : null;
     }
 
     protected function rules(): array
     {
         $isCreate = $this->editingId === null;
 
-        // Regla dinámica para identificador_asesor
-        $idRules = [
-            // si es create y el perfil es Asesor => required, si no => nullable
-            $this->perfilAsesorId !== null && (int) $this->perfil_usuario_id === (int) $this->perfilAsesorId ? ($isCreate ? 'required' : 'nullable') : 'nullable',
-            'integer',
-            'min:1',
-            Rule::unique('users', 'identificador_asesor')->ignore($this->editingId),
-        ];
-
-        return [
+        $rules = [
             'name' => ['required', 'string', 'max:120'],
             'email' => ['required', 'email', 'max:190', Rule::unique('users', 'email')->ignore($this->editingId)],
             'username' => ['required', 'string', 'max:60', Rule::unique('users', 'username')->ignore($this->editingId)],
-            'perfil_usuario_id' => ['required', 'max:250', Rule::exists('perfil_usuarios', 'id_perfil_usuario')],
+            'perfil_usuario_id' => ['required', Rule::exists('perfil_usuarios', 'id_perfil_usuario')],
             'estado' => ['boolean'],
-            'identificador_asesor' => $idRules,
             'password' => [$this->editingId ? 'nullable' : 'required', 'string', 'min:8', 'confirmed'],
+        ];
+
+        // ASESOR
+        if ((int) $this->perfil_usuario_id === (int) $this->perfilAsesorId) {
+            $rules['identificador_asesor'] = [$isCreate ? 'required' : 'nullable', 'integer', 'min:1', Rule::unique('users', 'identificador_asesor')->ignore($this->editingId)];
+        }
+
+        // INSTALADOR
+        if ((int) $this->perfil_usuario_id === (int) $this->perfilInstaladorId) {
+            $rules['identificador_instalador'] = ['required', 'integer', 'min:1', Rule::unique('users', 'identificador_instalador')->ignore($this->editingId)];
+        }
+
+        return $rules;
+    }
+
+    protected function messages(): array
+    {
+        return [
+            'identificador_instalador.unique' => 'Este identificador de instalador ya está registrado.',
+            'identificador_instalador.required' => 'El identificador del instalador es obligatorio.',
+            'identificador_instalador.integer' => 'El identificador del instalador debe ser un número.',
+            'identificador_instalador.min' => 'El identificador del instalador debe ser mayor a cero.',
+
+            'identificador_asesor.unique' => 'Este identificador de asesor ya está registrado.',
+            'identificador_asesor.required' => 'El identificador del asesor es obligatorio.',
+            'identificador_asesor.integer' => 'El identificador del asesor debe ser un número.',
+            'identificador_asesor.min' => 'El identificador del asesor debe ser mayor a cero.',
+
+            // mensajes comunes
+            'email.unique' => 'Este correo ya está registrado.',
+            'username.unique' => 'Este usuario ya está registrado.',
+            'password.confirmed' => 'Las contraseñas no coinciden.',
         ];
     }
 
@@ -83,17 +114,42 @@ class Index extends Component
         $validator->after(function ($v) {
             $email = strtolower(trim($this->email));
             $username = strtolower(trim($this->username));
-            $idAsesorStr = $this->identificador_asesor !== null ? (string) $this->identificador_asesor : null;
 
+            // Validación: username no puede ser igual al email
             if ($email !== '' && $username !== '' && $email === $username) {
                 $v->errors()->add('username', 'El usuario no puede ser igual al email.');
             }
-            if ($idAsesorStr !== null) {
-                if ($email !== '' && $email === $idAsesorStr) {
+
+            // Validación extra ASESOR
+            if ($this->identificador_asesor !== null) {
+                $idAsesorStr = (string) $this->identificador_asesor;
+
+                if ($email === $idAsesorStr) {
                     $v->errors()->add('identificador_asesor', 'El identificador no puede ser igual al email.');
                 }
-                if ($username !== '' && $username === $idAsesorStr) {
+
+                if ($username === $idAsesorStr) {
                     $v->errors()->add('identificador_asesor', 'El identificador no puede ser igual al usuario.');
+                }
+            }
+
+            /* =====================================================
+            VALIDACIÓN EXTRA PARA INSTALADOR (tabla instalador)
+            ===================================================== */
+
+            if ((int) $this->perfil_usuario_id === (int) $this->perfilInstaladorId) {
+                $existeInstalador = \App\Models\InstaladorModel::where('identificador_usuario', $this->identificador_instalador)
+                    ->when($this->editingId, function ($q) {
+                        $usuario = User::find($this->editingId);
+                        if ($usuario) {
+                            // No considerar el instalador del mismo usuario cuando estamos editando
+                            $q->where('identificador_usuario', '!=', $usuario->identificador_instalador);
+                        }
+                    })
+                    ->exists();
+
+                if ($existeInstalador) {
+                    $v->errors()->add('identificador_instalador', 'Este identificador de instalador ya está registrado.');
                 }
             }
         });
@@ -112,6 +168,10 @@ class Index extends Component
     {
         if ((int) $value !== (int) $this->perfilAsesorId) {
             $this->identificador_asesor = null;
+        }
+
+        if ((int) $value !== (int) $this->perfilInstaladorId) {
+            $this->identificador_instalador = null;
         }
     }
 
@@ -133,17 +193,21 @@ class Index extends Component
         $u = User::findOrFail($id);
 
         $this->editingId = $u->id;
-        $this->name = (string) $u->name;
-        $this->email = (string) $u->email;
-        $this->username = (string) ($u->username ?? '');
-        $this->perfil_usuario_id = (int) ($u->perfil_usuario_id ?? 2);
-        $this->estado = (bool) ($u->estado ?? true);
+        $this->name = $u->name;
+        $this->email = $u->email;
+        $this->username = $u->username;
+        $this->perfil_usuario_id = (int) $u->perfil_usuario_id;
+        $this->estado = (bool) $u->estado;
+
+        // asesor
         $this->identificador_asesor = $u->identificador_asesor;
+
+        // INSTALADOR
+        $this->identificador_instalador = $u->identificador_instalador;
 
         $this->password = '';
         $this->password_confirmation = '';
 
-        $this->showModal = true;
         $this->dispatch('ui:show-user-modal');
     }
 
@@ -159,63 +223,147 @@ class Index extends Component
         $this->ensureCanManage();
         $this->validate();
 
-        $data = [
-            'name' => $this->name,
-            'email' => $this->email,
-            'username' => $this->username,
-            'perfil_usuario_id' => $this->perfil_usuario_id,
-            'estado' => $this->estado,
-            'identificador_asesor' => $this->identificador_asesor,
-        ];
+        DB::beginTransaction();
+        try {
+            /* ==========================================================
+           DETERMINAR PERFIL
+        ========================================================== */
+            $esAsesor = (int) $this->perfil_usuario_id === (int) $this->perfilAsesorId;
+            $esInstalador = (int) $this->perfil_usuario_id === (int) $this->perfilInstaladorId;
 
-        if (!empty($this->password)) {
-            $data['password'] = $this->password; // cast hashed en el modelo
-        }
+            // LIMPIAR CAMPOS SEGÚN PERFIL
+            if ($esAsesor) {
+                $this->identificador_instalador = null;
+            } elseif ($esInstalador) {
+                $this->identificador_asesor = null;
+            } else {
+                $this->identificador_asesor = null;
+                $this->identificador_instalador = null;
+            }
 
-        if ($this->editingId) {
-            if ($this->editingId === auth()->id()) {
-                $this->dispatch('notify', type: 'warning', message: 'No puedes editar tu propio usuario aquí.');
+            /* ==========================================================
+           ARMAR DATA DE USERS
+        ========================================================== */
+            $data = [
+                'name' => $this->name,
+                'email' => $this->email,
+                'username' => $this->username,
+                'perfil_usuario_id' => $this->perfil_usuario_id,
+                'estado' => $this->estado,
+                'identificador_asesor' => $this->identificador_asesor,
+                'identificador_instalador' => $this->identificador_instalador,
+            ];
+
+            // TU LÍNEA ORIGINAL
+            if (!empty($this->password)) {
+                $data['password'] = $this->password; // hasheado por mutator
+            }
+
+            /* ==========================================================
+           EDITAR USUARIO
+        ========================================================== */
+            if ($this->editingId) {
+                if ($this->editingId === auth()->id()) {
+                    DB::rollBack();
+                    $this->dispatch('notify', type: 'warning', message: 'No puedes editar tu propio usuario aquí.');
+                    return;
+                }
+
+                $oldUser = User::find($this->editingId);
+                $oldInstallerId = $oldUser->identificador_instalador;
+
+                // Hash manual si trae password
+                if (!empty($this->password)) {
+                    $data['password'] = Hash::make($this->password);
+                } else {
+                    unset($data['password']);
+                }
+
+                // *** ACTUALIZA USERS ***
+                User::whereKey($this->editingId)->update($data);
+
+                /* ==========================================================
+               MANEJO TABLA INSTALADOR
+            ========================================================== */
+                if ($esInstalador) {
+                    if ($oldInstallerId) {
+                        if ($oldInstallerId != $this->identificador_instalador) {
+                            // CAMBIÓ IDENTIFICADOR → Actualizarlo
+                            InstaladorModel::where('identificador_usuario', $oldInstallerId)->update([
+                                'identificador_usuario' => $this->identificador_instalador,
+                                'nombre_instalador' => $this->name,
+                                'email_instalador' => $this->email,
+                                'status' => 'active',
+                            ]);
+                        } else {
+                            // NO CAMBIÓ IDENTIFICADOR → solo actualizar datos
+                            InstaladorModel::where('identificador_usuario', $oldInstallerId)->update([
+                                'nombre_instalador' => $this->name,
+                                'email_instalador' => $this->email,
+                                'status' => 'active',
+                            ]);
+                        }
+                    } else {
+                        // Si no tenía registro, crear uno
+                        InstaladorModel::create([
+                            'identificador_usuario' => $this->identificador_instalador,
+                            'nombre_instalador' => $this->name,
+                            'email_instalador' => $this->email,
+                            'celular_instalador' => null,
+                            'status' => 'active',
+                        ]);
+                    }
+                } else {
+                    // Si ya no es instalador → borrar registro existente
+                    if ($oldInstallerId) {
+                        InstaladorModel::where('identificador_usuario', $oldInstallerId)->update([
+                            'status' => 'inactive', // inactivo, no borrar
+                        ]);
+                    }
+                }
+
+                DB::commit();
+
+                $this->modalFlashType = 'success';
+                $this->modalFlash = 'Usuario actualizado.';
+                $this->js("setTimeout(() => Livewire.dispatch('ui:clear-flash'), 3000)");
                 return;
             }
 
+            /* ==========================================================
+           CREAR USUARIO
+        ========================================================== */
+            $data['password'] ??= $this->password;
 
-            // ⚠️ Con update() NO aplica el cast "hashed", así que hasheamos aquí.
-            if (!empty($this->password)) {
-                $data['password'] = Hash::make($this->password);
-            } else {
-                unset($data['password']); // no tocar password si vino vacío
+            // *** CREAR USERS ***
+            $user = User::create($data);
+
+            // SI ES INSTALADOR → CREAR REGISTRO
+            if ($esInstalador) {
+                InstaladorModel::create([
+                    'nombre_instalador' => $this->name,
+                    'celular_instalador' => null,
+                    'email_instalador' => $this->email,
+                    'identificador_usuario' => $this->identificador_instalador,
+                    'status' => 'active',
+                ]);
             }
 
-            User::whereKey($this->editingId)->update($data);
-
-             // 1) Mensaje dentro del modal (no cerrar, no resetear form)
-            $this->modalFlashType = 'success';
-            $this->modalFlash = 'Usuario actualizado.';
-
-            // 2) Resetear formulario, pero mantener el modal abierto
-            $this->js("setTimeout(() => Livewire.dispatch('ui:clear-flash'), 3000)");
-
-        } else {
-            $data['password'] ??= $this->password;
-            User::create($data);
+            DB::commit();
 
             $this->modalFlashType = 'success';
             $this->modalFlash = 'Usuario registrado.';
-
-            // 2) Resetear formulario, pero mantener el modal abierto
             $this->resetForm();
-            $this->editingId = null; // mantiene 'Nuevo usuario'
-
-
-            // 4) Si quieres refrescar lista paginada:
+            $this->editingId = null;
             $this->resetPage();
-
-            // Limpia el mensaje solo
             $this->js("setTimeout(() => Livewire.dispatch('ui:clear-flash'), 3000)");
+        } catch (\Throwable $e) {
+            DB::rollBack();
 
-
+            // Mostrar error visible en el modal
+            $this->modalFlashType = 'danger';
+            $this->modalFlash = 'Error: ' . $e->getMessage();
         }
-
     }
 
     public function confirmDelete(int $id): void
@@ -269,6 +417,7 @@ class Index extends Component
         $this->perfil_usuario_id = 2;
         $this->estado = true;
         $this->identificador_asesor = null;
+        $this->identificador_instalador = null;
         $this->password = '';
         $this->password_confirmation = '';
     }

@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Auth;
 
-
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Auth;
 use Livewire\Attributes\Layout;
@@ -16,11 +15,11 @@ class Login extends Component
     public bool $remember = false;
 
     protected array $rules = [
-        'email' => ['required','string','email'],
-        'password' => ['required','string'],
-    ];
+        'email' => ['required', 'string', 'email'],
+        'password' => ['required', 'string'],
+    ]; // usa el layout de abajo
 
-    #[Layout('layouts.guest')] // usa el layout de abajo
+    #[Layout('layouts.guest')]
     public function render()
     {
         return view('livewire.auth.login');
@@ -30,54 +29,61 @@ class Login extends Component
     {
         $this->validate();
 
-        // Rate limit (5 intentos por minuto por email+IP)
-        $key = Str::lower($this->email).'|'.request()->ip();
+        // Rate limit
+        $key = Str::lower($this->email) . '|' . request()->ip();
         if (RateLimiter::tooManyAttempts($key, 5)) {
             $seconds = RateLimiter::availableIn($key);
-            $this->addError('email', __('Too many attempts. Try again in :s seconds.', ['s' => $seconds]));
+            $this->addError('email', "Demasiados intentos. Intenta en {$seconds} segundos.");
             return;
         }
 
-        // 1) Buscar usuario por email
+        // 1) Buscar usuario
         $user = \App\Models\User::where('email', $this->email)->first();
 
-        // 2) Si existe pero está inactivo, mensaje y NO contamos intento
-        if ($user && !(bool)($user->estado ?? false)) {
+        // 2) Usuario inactivo
+        if ($user && !(bool) ($user->estado ?? false)) {
             $this->addError('email', 'Tu cuenta está inactiva. Habla con un administrador.');
             return;
         }
 
-
-         // 3) Intento de login normal
+        // 3) Intento de login
         if (Auth::attempt(['email' => $this->email, 'password' => $this->password], $this->remember)) {
             request()->session()->regenerate();
             RateLimiter::clear($key);
 
             $user = Auth::user();
 
-            // Redirigir según perfil de usuario
+            /* ==============================
+           REDIRECCIÓN SEGÚN PERFIL
+        ============================== */
 
-            if ($user->perfil_usuario_id == 2 || $user->perfil_usuario_id == 1) { // Admin - // Super Admin
+            // Admin / Super
+            if (in_array($user->perfil_usuario_id, [1, 2])) {
                 return redirect()->intended(route('orders.pending.list'));
             }
 
-            if ($user->perfil_usuario_id == 3) { // Auxiliar
-                return redirect()->intended(route('orders.pending.auxiliar'));
+            // Auxiliar (NO tienes ruta → usar la lista normal)
+            if ($user->perfil_usuario_id == 3) {
+                return redirect()->intended(route('orders.pending.list'));
             }
 
-            if ($user->perfil_usuario_id == 4) { // Producción
+            // Producción
+            if ($user->perfil_usuario_id == 4) {
                 return redirect()->intended(route('orders.pending.production'));
             }
 
-            if ($user->perfil_usuario_id == 5) { // Asesor Comercial
+            // Asesor (NO tienes ruta propia → producción)
+            if ($user->perfil_usuario_id == 5) {
                 return redirect()->intended(route('orders.pending.production'));
             }
 
+            // Instalador
+            if ($user->perfil_usuario_id == 7) {
+                return redirect()->intended(route('ordenes.trabajo.asignados'));
+            }
         }
 
-        RateLimiter::hit($key, 60); // penaliza 60s por intento fallido
-        $this->addError('email', __('These credentials do not match our records.'));
+        RateLimiter::hit($key, 60);
+        $this->addError('email', 'Las credenciales no coinciden con nuestros registros.');
     }
-
-
 }

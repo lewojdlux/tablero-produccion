@@ -30,11 +30,24 @@ class EnsurePerfil
     protected function routeForPerfil($user): string
     {
         return match ((int) $user->perfil_usuario_id) {
-            1, 2 => route('orders.pending.list'),            // Super/Admin
-            3    => route('orders.pending.auxiliar'),   // Auxiliar
-            4, 5    => route('orders.pending.production'), // Producción
-           // 5    => route('orders.pending.asesor'),     // Asesor
-            default => route('orders.pending'),
+
+            // ADMIN y SUPER
+            1, 2 => route('orders.pending.list'),
+
+            // AUXILIAR (NO tienes ruta propia → usa la lista normal)
+            3    => route('orders.pending.list'),
+
+            // PRODUCCIÓN
+            4    => route('orders.pending.production'),
+
+            // ASESOR (NO tienes ruta propia → usa producción)
+            5    => route('orders.pending.production'),
+
+            // INSTALADOR (perfil 7)
+            7    => route('ordenes.trabajo.asignados'),
+
+            // Cualquier otro perfil desconocido
+            default => route('orders.pending.list'),
         };
     }
 }
