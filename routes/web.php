@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Broadcast;
 
 use App\Http\Controllers\OrdenesTrabajoController;
 use App\Http\Controllers\AsignarMaterialController;
+use App\Http\Controllers\SeguimientoCrmController;
 
 
 
@@ -110,6 +111,20 @@ Route::middleware(['auth', 'perfil:1,2'])
 
         })->name('notificaciones.leer');
 
+
+
+        Route::middleware(['auth', 'perfil:1,2,5'])
+        ->prefix('crm')
+        ->group(function () {
+
+            // Vista principal CRM
+            Route::get('/seguimiento', [SeguimientoCrmController::class, 'index'])
+                ->name('portal-crm.seguimiento.index');
+
+            // Data AJAX CRM
+            Route::get('/seguimiento/data', [SeguimientoCrmController::class, 'data'])
+                ->name('portal-crm.seguimiento.data');
+        });
 
 
 

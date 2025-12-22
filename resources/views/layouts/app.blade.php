@@ -91,6 +91,13 @@
         {{-- Navegación del sidebar --}}
         <nav class="flex-1 p-3 space-y-1 ">
 
+            @php
+                $perfil = (int) (auth()->user()->perfil_usuario_id ?? 0);
+                $isAdmin = in_array($perfil, [1, 2], true);
+                $isInstalador = $perfil === 6;
+                $isAsesor = $perfil === 5;
+            @endphp
+
 
             {{-- SECCIÓN MENÚ --}}
             <div class="px-2 text-xs uppercase text-zinc-500 mb-2">Menú</div>
@@ -98,7 +105,7 @@
             {{-- DASHBOARD --}}
             <a href="{{ route('dashboard') }}"
                 class="block rounded-lg px-3 py-2 text-sm
-   {{ request()->routeIs('dashboard') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                {{ request()->routeIs('dashboard') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
                 Dashboard
             </a>
 
@@ -111,7 +118,7 @@
                 {{-- TÍTULO --}}
                 <button type="button"
                     class="w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm
-        {{ $otActive ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                    {{ $otActive ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
                     <span class="flex items-center gap-2">
                         <i class="fa-solid fa-clipboard-list text-xs"></i>
                         Órdenes de trabajo
@@ -140,10 +147,18 @@
             {{-- USUARIOS --}}
             <a href="{{ route('users.index') }}"
                 class="block rounded-lg px-3 py-2 text-sm
-   {{ request()->routeIs('users.index') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                {{ request()->routeIs('users.index') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
                 Usuarios
             </a>
 
+
+            @if ($isAdmin || $isAsesor)
+                <a href="{{ route('portal-crm.seguimiento.index') }}"
+                class="block rounded-lg px-3 py-2 text-sm
+                {{ request()->routeIs('portal-crm.seguimiento.*') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                    Seguimiento CRM
+                </a>
+            @endif
 
 
             {{-- Agrega aquí más enlaces de tu app --}}

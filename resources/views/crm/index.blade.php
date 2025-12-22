@@ -1,7 +1,12 @@
 @extends('layouts.app')
 
 @section('content')
-    <div id="crmApp" class="space-y-4">
+    <style>
+        [v-cloak] {
+            display: none;
+        }
+    </style>
+    <div id="crmApp" v-cloak class="space-y-4">
 
         <h2 class="text-lg font-semibold">Seguimiento CRM</h2>
 
@@ -129,6 +134,7 @@
 
 
 @push('scripts')
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js" ></script>
     <script>
         const {
             createApp
