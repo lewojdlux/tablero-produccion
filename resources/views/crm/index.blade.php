@@ -153,7 +153,8 @@
                     },
                     page: 1,
                     perPage: 50,
-                    lastPage: 1
+                    lastPage: 1,
+                    _searchTimer: null,
                 }
             },
 
@@ -170,7 +171,36 @@
                 }
             },
 
+
+            watch: {
+                search(newVal, oldVal) {
+                    this.page = 1;
+                    this.debounceBuscar();
+                },
+                'filters.start'() {
+                    this.page = 1;
+                    this.cargarDatos();
+                },
+                'filters.end'() {
+                    this.page = 1;
+                    this.cargarDatos();
+                },
+                'filters.asesor'() {
+                    this.page = 1;
+                    this.cargarDatos();
+                }
+            },
+
+
             methods: {
+
+                debounceBuscar() {
+                    clearTimeout(this._searchTimer);
+
+                    this._searchTimer = setTimeout(() => {
+                        this.cargarDatos();
+                    }, 400); // 400ms es un debounce profesional
+                },
 
                 toggle(id) {
                     this.expanded = this.expanded === id ? null : id;
