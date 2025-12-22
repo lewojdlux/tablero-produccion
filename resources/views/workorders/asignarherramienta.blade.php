@@ -9,6 +9,9 @@
 
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
+
+
+
     <div id="asignar-herramienta-app" v-cloak data-order-id="{{ $orderId }}"
         data-materials-url="{{ route('workorders.materials', ['id' => $orderId]) }}"
         data-add-url="{{ route('workorders.materials.asignar', ['workorder' => $orderId]) }}"

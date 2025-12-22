@@ -79,14 +79,37 @@ Route::middleware(['auth', 'perfil:1,2'])
 
         Route::get('/ordenes-trabajo/{workorder}', [OrdenesTrabajoController::class, 'verOrden'])->name('workorders.show');
 
-        Route::post('/notificaciones/{notification}/leer', function ($notification) {
-            auth()->user()
+        Route::get('/notificaciones', function () {
+            $notificaciones = auth()->user()
+                ->notifications()
+                ->latest()
+                ->paginate(20);
+
+            return view('notificaciones.index', compact('notificaciones'));
+        })->name('notificaciones.index');
+
+
+
+        Route::get('/notificaciones/{notification}', function ($notification) {
+
+            $n = auth()->user()
                 ->notifications()
                 ->where('id', $notification)
-                ->update(['read_at' => now()]);
+                ->firstOrFail();
 
-            return response()->json(['ok' => true]);
+            if (is_null($n->read_at)) {
+                $n->markAsRead();
+            }
+
+            // Redirigir al pedido si existe
+            if (isset($n->data['pedido_id'])) {
+                return redirect()->route('pedidos.materiales.show', $n->data['pedido_id']);
+            }
+
+            return redirect()->route('notificaciones.index');
+
         })->name('notificaciones.leer');
+
 
 
 

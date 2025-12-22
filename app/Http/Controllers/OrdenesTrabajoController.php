@@ -408,4 +408,26 @@ class OrdenesTrabajoController
             );
         }
     }
+
+
+    public function show($pedidoId)
+    {
+
+
+
+
+            $pedido = PedidoMaterialModel::with([
+                'ordenTrabajo.instalador',
+                'items',
+                'instalador'
+            ])->findOrFail($pedidoId);
+
+            return view('workorders.pedidosmateriales', [
+                'pedido' => $pedido,
+                'ordenTrabajo' => $pedido->ordenTrabajo,
+                'items' => $pedido->items,
+            ]);
+
+
+    }
 }

@@ -49,6 +49,11 @@
                                 <small class="text-zinc-500">@{{ n.created_at }}</small>
                             </div>
 
+                            <a href="{{ route('notificaciones.index') }}"
+                            class="block text-center text-xs py-2 hover:bg-zinc-100">
+                                Ver todas las notificaciones
+                            </a>
+
                             <div v-if="notificaciones.length === 0" class="px-3 py-6 text-center text-zinc-500 text-xs">
                                 No hay notificaciones
                             </div>
@@ -218,6 +223,8 @@
         const routePedidoMaterial = "{{ route('pedidos.materiales.byOrden', ':id') }}";
         const routeVerOT = "{{ route('workorders.show', ':id') }}";
         const routeAsignarMaterial = "{{ route('workorders.materials', ':id') }}";
+        const routePedidoShow = "{{ route('pedidos.materiales.show', ':id') }}";
+
 
         window.AUTH_USER_ID = {{ auth()->id() }};
 
@@ -255,7 +262,6 @@
                           window.Echo
                             .private(`App.Models.User.${window.AUTH_USER_ID}`)
                             .notification((payload) => {
-                                console.log('🔔 NOTIFICACIÓN RECIBIDA:', payload);
 
                                 this.pushToast(payload);
 
@@ -274,7 +280,6 @@
 
                             });
 
-                            console.log("Echo YA ESTÁ LISTO y conectado.");
                         }
                     }, 300);
                 },
@@ -354,7 +359,7 @@
 
                         // Redirigir al pedido
                         if (n.data && n.data.pedido_id) {
-                            window.location.href = `/pedidos-materiales/${n.data.pedido_id}`;
+                            window.location.href = routePedidoShow.replace(':id', n.data.pedido_id);
                         }
                     },
 
