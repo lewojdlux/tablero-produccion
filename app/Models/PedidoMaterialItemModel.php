@@ -17,4 +17,14 @@ class PedidoMaterialItemModel extends Model
         'descripcion_material',
         'cantidad',
     ];
+
+
+    public function items()
+    {
+        return $this->hasMany(
+            PedidoMaterialItemModel::class,
+            'pedido_material_id',
+            'id_pedido_material'
+        );
+    }
 }

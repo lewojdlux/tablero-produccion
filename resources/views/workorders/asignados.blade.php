@@ -1,6 +1,11 @@
 @extends('layouts.app')
 
 @section('content')
+    <style>
+        [v-cloak] {
+            display: none;
+        }
+    </style>
     <div id="app" class="space-y-4" v-cloak>
 
         {{-- Header --}}
@@ -119,24 +124,41 @@
                         <td class="px-2 py-1">@{{ workOrder.vendedor }}</td>
 
                         <td class="px-2 py-1 text-center">
+                            <div class="d-flex justify-content-center flex-wrap gap-2">
 
-                            <!-- IN PROGRESS -->
-                            <button v-if="workOrder.status === 'in_progress'" class="btn btn-warning btn-sm"
-                                @click="irAsignarMaterial(workOrder.id_work_order)">
-                                Asignar Material
-                            </button>
+                                @if ($isAdmin)
+                                    <!-- VER OT -->
+                                    <button class="btn btn-outline-secondary btn-sm" title="Ver orden de trabajo"
+                                        @click="verOT(workOrder.id_work_order)">
+                                        <i class="fas fa-eye me-1"></i>
+                                        OT
+                                    </button>
 
-                            <!-- PENDING -->
-                            <button v-else-if="workOrder.status === 'pending'" class="btn btn-danger btn-sm"
-                                @click="iniciarOT(workOrder.id_work_order)">
-                                Iniciar OT
-                            </button>
+                                    <!-- VER SOLICITUD DE MATERIAL -->
+                                    <button v-if="workOrder.pedidos_materiales_count > 0" class="btn btn-primary btn-sm"
+                                        title="Ver solicitud de material"
+                                        @click="verPedidoMaterial(workOrder.id_work_order)">
+                                        <i class="fas fa-box-open me-1"></i>
+                                        Solicitud
+                                    </button>
+                                @elseif ($isInstalador)
+                                    <!-- ASIGNAR MATERIAL -->
+                                    <button v-if="workOrder.status === 'in_progress'"
+                                        class="btn btn-warning btn-sm text-dark" title="Asignar material"
+                                        @click="irAsignarMaterial(workOrder.id_work_order)">
+                                        <i class="fas fa-tools me-1"></i>
+                                        Material
+                                    </button>
 
-                            <!-- OTROS ESTADOS -->
-                            <span v-else class="text-zinc-500 text-xs">
-                                Sin acciones disponibles
-                            </span>
+                                    <!-- INICIAR OT -->
+                                    <button v-else-if="workOrder.status === 'pending'" class="btn btn-danger btn-sm"
+                                        title="Iniciar orden de trabajo" @click="iniciarOT(workOrder.id_work_order)">
+                                        <i class="fas fa-play me-1"></i>
+                                        Iniciar
+                                    </button>
+                                @endif
 
+                            </div>
                         </td>
 
                     </tr>
@@ -155,6 +177,28 @@
         </div>
 
 
+        <!-- TOASTS -->
+        <div class="fixed top-4 right-4 z-[9999] space-y-2">
+            <div v-for="t in toasts" :key="t.id"
+                class="w-80 bg-white border border-zinc-200 shadow-lg rounded-lg
+                        animate-slide-in overflow-hidden">
+
+                <div class="p-3">
+                    <div class="flex justify-between items-start">
+                        <strong class="text-sm">@{{ t.title }}</strong>
+                        <button class="text-zinc-400 hover:text-zinc-700"
+                                @click="removeToast(t.id)">✕</button>
+                    </div>
+
+                    <p class="text-xs text-zinc-700 mt-1">@{{ t.message }}</p>
+
+                    <small class="text-[10px] text-zinc-400">
+                        @{{ t.time }}
+                    </small>
+                </div>
+            </div>
+        </div>
+
 
 
 
@@ -166,7 +210,19 @@
 
 @push('scripts')
     <script src="https://js.pusher.com/7.2/pusher.min.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 
+
+
+    <script>
+        const routePedidoMaterial = "{{ route('pedidos.materiales.byOrden', ':id') }}";
+        const routeVerOT = "{{ route('workorders.show', ':id') }}";
+        const routeAsignarMaterial = "{{ route('workorders.materials', ':id') }}";
+
+        window.AUTH_USER_ID = {{ auth()->id() }};
+
+
+    </script>
 
     <script>
         document.addEventListener("DOMContentLoaded", function() {
@@ -180,23 +236,43 @@
                         search: "",
                         workOrders: @json($dataMatrial->items()), // viene del controlador,
                         notificaciones: @json($notificaciones ?? []),
-                        mostrarNotificaciones: false
+                        mostrarNotificaciones: false,
+                        toasts: [],
+
 
                     }
                 },
 
                 mounted() {
+
+
+
                     // Escuchar solicitudes de material EN TIEMPO REAL
                     const esperarEcho = setInterval(() => {
                         if (window.Echo) {
                             clearInterval(esperarEcho);
 
-                            window.Echo.private("admin-channel")
-                                .listen(".material.solicitado", (e) => {
-                                    console.log("Evento recibido:", e);
-                                   // this.notificaciones.unshift(e.data);
-                                    this.notificaciones.unshift(e)
+                          window.Echo
+                            .private(`App.Models.User.${window.AUTH_USER_ID}`)
+                            .notification((payload) => {
+                                console.log('🔔 NOTIFICACIÓN RECIBIDA:', payload);
+
+                                this.pushToast(payload);
+
+                                this.notificaciones.unshift({
+                                    id: Date.now(),
+                                    data: payload,
+                                    created_at: new Date().toLocaleString()
                                 });
+
+
+                                // 👉 Notificación del navegador SOLO si no está activa la pestaña
+                                if (document.visibilityState !== 'visible') {
+                                    this.showBrowserNotification(payload);
+                                }
+
+
+                            });
 
                             console.log("Echo YA ESTÁ LISTO y conectado.");
                         }
@@ -259,7 +335,7 @@
                     },
 
                     irAsignarMaterial(id) {
-                        window.location.href = `/tablero-produccion/ordenes/trabajo/${id}/materials`;
+                        window.location.href = routeAsignarMaterial.replace(':id', id);
                     },
 
                     toggleNotificaciones() {
@@ -270,7 +346,9 @@
 
                         fetch(`/notificaciones/${n.id}/leer`, {
                             method: "POST",
-                            headers: { "X-CSRF-TOKEN": "{{ csrf_token() }}" }
+                            headers: {
+                                "X-CSRF-TOKEN": "{{ csrf_token() }}"
+                            }
                         });
 
 
@@ -278,6 +356,55 @@
                         if (n.data && n.data.pedido_id) {
                             window.location.href = `/pedidos-materiales/${n.data.pedido_id}`;
                         }
+                    },
+
+                    pushToast(payload) {
+                        const id = Date.now();
+
+                        this.toasts.unshift({
+                            id,
+                            title: "Nueva solicitud de material",
+                            message: `Material: ${payload.material.descripcion} (${payload.material.cantidad})`,
+                            time: new Date().toLocaleTimeString()
+                        });
+
+                        // auto cerrar en 6 segundos
+                        setTimeout(() => {
+                            this.removeToast(id);
+                        }, 6000);
+                    },
+
+                    removeToast(id) {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    },
+
+
+                    verPedidoMaterial(id) {
+                        window.location.href = routePedidoMaterial.replace(':id', id);
+                    },
+
+                    verOT(id) {
+                        window.location.href = routeVerOT.replace(':id', id);
+                    },
+
+                    isTabInactive() {
+                        return document.visibilityState !== 'visible';
+                    },
+
+                    showBrowserNotification(payload) {
+                        if (!('Notification' in window)) return;
+                        if (Notification.permission !== 'granted') return;
+
+                        const notification = new Notification(payload.title, {
+                            body: payload.message,
+                            icon: '/favicon.ico', // o el icono que quieras
+                            tag: `pedido-${payload.pedido_id}`, // evita duplicados
+                        });
+
+                        notification.onclick = () => {
+                            window.focus();
+                            window.location.href = `/pedidos-materiales/${payload.pedido_id}`;
+                        };
                     }
 
                 }

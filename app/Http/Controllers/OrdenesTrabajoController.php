@@ -15,12 +15,9 @@ use App\Services\OrderWorkService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
-
 use App\Notifications\MaterialSolicitadoNotification;
+use App\Notifications\NewPedidoMaterial;
 use Illuminate\Support\Facades\Notification;
-
-
-
 
 class OrdenesTrabajoController
 {
@@ -114,13 +111,10 @@ class OrdenesTrabajoController
                 'data' => $ot,
             ]);
         } catch (\Exception $e) {
-            return response()->json(
-                [
-                    'success' => false,
-                    'message' => $e->getMessage(),
-                ],
-                500,
-            );
+            return response()->json([
+                'success' => false,
+                'message' => $e->getMessage(),
+            ]);
         }
     }
 
@@ -134,9 +128,7 @@ class OrdenesTrabajoController
             // Si el usuario no es admin NO tiene sentido mostrar notificaciones
             $usuario = auth()->user();
 
-            $notificaciones = in_array($usuario->perfil_usuario_id, [1,2])
-                ? $usuario->unreadNotifications()->orderBy('created_at', 'desc')->get()
-                : collect(); // vacío para instaladores
+            $notificaciones = in_array($usuario->perfil_usuario_id, [1, 2]) ? $usuario->unreadNotifications()->orderBy('created_at', 'desc')->get() : collect(); // vacío para instaladores
 
             return view('workorders.asignados', [
                 'dataMatrial' => $ordenesTrabajo,
@@ -172,15 +164,23 @@ class OrdenesTrabajoController
     }
 
     /* funcion para obtener los materiales de una orden de trabajo */
-    public function indexMaterialesOrdenes($id)
+    public function indexMaterialesOrdenes(Request $request, $id)
     {
         try {
-            $orderId = $id;
-            $materials = $this->orderWorkService->getMaterialsByOrderId($orderId);
+            $materials = $this->orderWorkService->getMaterialsByOrderId($id);
 
-            return view('workorders.asignarmateria', [
+            // 👉 CUANDO VIENE DE VUE (fetch)
+            if ($request->expectsJson()) {
+                return response()->json($materials);
+            }
+
+            // 👉 CUANDO ES NAVEGACIÓN NORMAL
+            $workOrder = OrderWorkModel::with(['instalador', 'pedidosMateriales.instalador', 'pedidosMateriales.items'])->findOrFail($id);
+
+            return view('workorders.asignarherramienta', [
                 'materials' => $materials,
-                'orderId' => $orderId,
+                'orderId' => $id,
+                'dataAsignarMaterial' => $workOrder,
             ]);
         } catch (\Exception $e) {
             // Manejo de errores
@@ -189,34 +189,46 @@ class OrdenesTrabajoController
     }
 
     /*  funcion para asignar material a una orden de trabajo */
-    public function asignarMaterial($orderId, $materialId, Request $request)
+    public function asignarMaterial(Request $request, $orderId)
     {
         try {
-            $cantidad = $request->input('cantidad');
+            $request->validate([
+                'herramienta_id' => 'required|integer',
+                'cantidad' => 'required|integer|min:1',
+            ]);
 
-            if ($cantidad < 1) {
-                return response()->json([
-                    'success' => false,
-                    'message' => 'La cantidad debe ser mayor a 0.',
+            $materialId = $request->herramienta_id;
+            $cantidad = $request->cantidad;
+
+            $registro = WorkOrdersMaterialsModel::where('work_order_id', $orderId)->where('material_id', $materialId)->first();
+
+            if ($registro) {
+                $registro->cantidad += $cantidad;
+                $registro->save();
+            } else {
+                $registro = WorkOrdersMaterialsModel::create([
+                    'work_order_id' => $orderId,
+                    'material_id' => $materialId,
+                    'cantidad' => $cantidad,
                 ]);
             }
 
-            // Aquí guardas el registro en tu tabla pivot o la tabla que manejes
-            WorkOrdersMaterialsModel::create([
-                'work_order_id' => $orderId,
-                'material_id' => $materialId,
-                'cantidad' => $cantidad,
-            ]);
-
             return response()->json([
                 'success' => true,
-                'message' => 'Material asignado correctamente.',
+                'item' => [
+                    'id_work_order_material' => $registro->id_work_order_material,
+                    'id_material' => $materialId,
+                    'cantidad' => $registro->cantidad,
+                    'nombre' => optional($registro->material)->nombre_material ?? optional($registro->material)->nombre,
+                    'codigo' => optional($registro->material)->codigo_material ?? optional($registro->material)->codigo,
+                ],
             ]);
-        } catch (\Exception $e) {
+        } catch (\Throwable $e) {
             return response()->json(
                 [
                     'success' => false,
-                    'message' => $e->getMessage(),
+                    'message' => 'Error al asignar material',
+                    'error' => $e->getMessage(),
                 ],
                 500,
             );
@@ -238,115 +250,162 @@ class OrdenesTrabajoController
         }
     }
 
-
     /* funcion para eliminar material asignado de una orden de trabajo */
     public function eliminarMaterial($orderId, $materialId, $womId)
     {
         try {
-            $deleted = WorkOrdersMaterialsModel::where('id_work_order_material', $womId)
-                ->where('work_order_id', $orderId)
-                ->where('material_id', $materialId)
-                ->delete();
+            $deleted = WorkOrdersMaterialsModel::where('id_work_order_material', $womId)->where('work_order_id', $orderId)->where('material_id', $materialId)->delete();
 
             if (!$deleted) {
                 return response()->json([
                     'success' => false,
-                    'message' => 'No se encontró el material para eliminar.'
+                    'message' => 'No se encontró el material para eliminar.',
                 ]);
             }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Material eliminado correctamente.'
+                'message' => 'Material eliminado correctamente.',
             ]);
-
         } catch (\Exception $e) {
-
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(
+                [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ],
+                500,
+            );
         }
     }
-
 
     public function solicitarMaterial(Request $request)
     {
         try {
-
-
             $request->validate([
                 'orden_trabajo_id' => 'required|integer',
                 'codigo_material' => 'required|string',
-                'descripcion_material' => 'required|string',
+                'observacion' => 'required|string',
                 'cantidad' => 'required|integer|min:1',
             ]);
 
-            // IDENTIFICADOR DEL INSTALADOR DESDE USERS
-            $identificador = Auth::user()->identificador_instalador;
+            $usuario = Auth::user();
 
-            // BUSCAR EL INSTALADOR REAL
-            $instalador = InstaladorModel::where('identificador_usuario', $identificador)->first();
+            $instalador = InstaladorModel::where('identificador_usuario', $usuario->identificador_instalador)->firstOrFail();
 
+            // ✅ 1 SOLO PEDIDO POR OT + INSTALADOR
+            $pedido = PedidoMaterialModel::where('orden_trabajo_id', $request->orden_trabajo_id)->where('instalador_id', $instalador->id_instalador)->where('status', 'queued')->first();
 
-            $pedido = PedidoMaterialModel::create([
-                'orden_trabajo_id' => $request->orden_trabajo_id,
-                'material_id' => null,
-                'instalador_id' => $instalador->id_instalador,
-                'status' => 'queued',
-                'fecha_solicitud' => now(),
-                'observaciones' => $request->observaciones,
-                'fecha_registro' => now(),
-            ]);
+            if (!$pedido) {
+                $pedido = PedidoMaterialModel::create([
+                    'orden_trabajo_id' => $request->orden_trabajo_id,
+                    'instalador_id' => $instalador->id_instalador,
+                    'status' => 'queued',
+                    'fecha_solicitud' => now(),
+                    'fecha_registro' => now(),
+                ]);
+            }
 
-            $item = PedidoMaterialItemModel::create([
-                'pedido_material_id' => $pedido->id_pedido_material,
-                'codigo_material' => $request->codigo_material,
-                'descripcion_material' => $request->descripcion_material,
-                'cantidad' => $request->cantidad
-            ]);
+            // ✅ ITEMS: MISMO CÓDIGO → SUMA
+            $item = PedidoMaterialItemModel::where('pedido_material_id', $pedido->id_pedido_material)->where('codigo_material', $request->codigo_material)->first();
 
+            if ($item) {
+                $item->cantidad += $request->cantidad;
+                $item->descripcion_material = $request->observacion;
+                $item->save();
+            } else {
+                $item = PedidoMaterialItemModel::create([
+                    'pedido_material_id' => $pedido->id_pedido_material,
+                    'codigo_material' => $request->codigo_material,
+                    'descripcion_material' => $request->observacion,
+                    'cantidad' => $request->cantidad,
+                ]);
+            }
 
-            // -----------------------------------------
-            // ENVIAR NOTIFICACIÓN A ADMIN Y COORDINADOR
-            // -----------------------------------------
-
-            $usuariosDestino = User::whereIn('perfil_usuario_id', [1, 2]) // ejemplo: admin = 1, coordinador = 2
-                                ->get();
-
-            Notification::send($usuariosDestino, new MaterialSolicitadoNotification($pedido, $item));
-
-
-            // DATOS QUE VIAJARÁN EN EL EVENTO
+            // 🔔 NOTIFICACIÓN (DB)
             $payload = [
-                'title' => 'Nueva solicitud de material',
-                'message' => "Material: {$item->descripcion_material} (Cant: {$item->cantidad})",
                 'pedido_id' => $pedido->id_pedido_material,
+                'orden_trabajo_id' => $pedido->orden_trabajo_id,
+                'instalador_id' => $pedido->instalador_id,
+                'material' => [
+                    'codigo' => $item->codigo_material,
+                    'descripcion' => $item->descripcion_material,
+                    'cantidad' => $item->cantidad,
+                ],
                 'created_at' => now()->toDateTimeString(),
             ];
 
-
-            // ENVIAR EVENTO WEBSOCKET
-            //broadcast(new MaterialSolicitadoEvent($payload))->toOthers();
-            broadcast(new MaterialSolicitadoEvent($payload));
-
-
-
-
+            $usuariosDestino = User::whereIn('perfil_usuario_id', [1, 2])->get();
+            foreach ($usuariosDestino as $user) {
+                Notification::send($user, new NewPedidoMaterial([
+                    'pedido_id' => $pedido->id_pedido_material,
+                    'material' => [
+                        'codigo' => $item->codigo_material,
+                        'descripcion' => $item->descripcion_material,
+                        'cantidad' => $item->cantidad,
+                    ],
+                ]));
+            }
 
             return response()->json([
                 'success' => true,
-                'message' => 'Solicitud registrada correctamente'
+                'message' => 'Solicitud registrada correctamente',
             ]);
-
-        } catch (\Exception $e) {
-
-            return response()->json([
-                'success' => false,
-                'message' => $e->getMessage()
-            ], 500);
+        } catch (\Throwable $e) {
+            return response()->json(
+                [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ],
+                500,
+            );
         }
     }
 
+    public function verPedidoMaterial($orderId)
+    {
+        try {
+            $ordenTrabajo = OrderWorkModel::with(['instalador', 'pedidosMateriales.instalador', 'pedidosMateriales.items'])->findOrFail($orderId);
 
+            return view('workorders.pedidosmateriales', [
+                'ordenTrabajo' => $ordenTrabajo,
+            ]);
+        } catch (\Exception $e) {
+            // Manejo de errores
+            return response()->view('errors.500', ['message' => $e->getMessage()], 500);
+        }
+    }
+
+    public function verOrden($orderId)
+    {
+        try {
+            $ordenTrabajo = OrderWorkModel::with(['instalador', 'pedidosMateriales.instalador', 'pedidosMateriales.items'])->findOrFail($orderId);
+
+            return view('workorders.pedidosmateriales', [
+                'ordenTrabajo' => $ordenTrabajo,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(
+                [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ],
+                500,
+            );
+        }
+    }
+
+    public function getMaterialesJson($id)
+    {
+        try {
+            $materials = $this->orderWorkService->getMaterialsByOrderId($id);
+            return response()->json($materials);
+        } catch (\Exception $e) {
+            return response()->json(
+                [
+                    'message' => $e->getMessage(),
+                ],
+                500,
+            );
+        }
+    }
 }

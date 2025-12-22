@@ -1,17 +1,24 @@
 @extends('layouts.app')
 
 @section('content')
-    <!-- Asegúrate de tener Bootstrap CSS en tu layout; si no, agrega:
-                <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-                -->
+    <style>
+        [v-cloak] {
+            display: none;
+        }
+    </style>
+
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <div id="asignar-herramienta-app" data-order-id="{{ $orderId ?? ($dataAsignarMaterial['id_work_order'] ?? '') }}"
-        data-add-url="{{ url('registrar/herramienta') }}" data-delete-base="{{ url('workorders') }}"
-        data-pedido-base="{{ url('workorders') }}" class="p-4">
+
+    <div id="asignar-herramienta-app" v-cloak data-order-id="{{ $orderId }}"
+        data-materials-url="{{ route('workorders.materials', ['id' => $orderId]) }}"
+        data-add-url="{{ route('workorders.materials.asignar', ['workorder' => $orderId]) }}"
+        data-pedido-url="{{ route('pedidos.materiales.asignar', ['pedido' => $orderId]) }}"
+        class="p-4">
 
         {{-- Detalle orden --}}
         <div class="mb-3">
-            <a href="{{ route('asignar.material.index') }}" class="btn btn-sm btn-dark " ><i class="fa-solid fa-arrow-left" title="Volver a la sordenes de trabajo" ></i></a>
+            <a href="{{ route('ordenes.trabajo.asignados') }}" class="btn btn-sm btn-dark "><i class="fa-solid fa-arrow-left"
+                    title="Volver a la sordenes de trabajo"></i></a>
             <dl class="row">
                 <dt class="col-3">Pedido</dt>
                 <dd class="col-9">{{ $dataAsignarMaterial['pedido'] ?? '—' }}</dd>
@@ -32,19 +39,35 @@
                     placeholder="Buscar herramienta por nombre o código...">
 
                 <ul v-if="suggestions.length && showSuggestions" class="list-group position-absolute w-100 mt-1 shadow"
-                    style="z-index:1055; max-height:220px; overflow:auto;">
-                    <li v-for="(s, idx) in suggestions" :key="s.id"
-                        class="list-group-item list-group-item-action" :class="focusedIndex === idx ? 'active' : ''"
-                        @mouseenter="focusedIndex = idx" @mouseleave="focusedIndex = -1" @click="selectSuggestion(s)">
-                        <div class="fw-semibold">@{{ s.nombre }}</div>
-                        <div class="small text-muted">@{{ s.codigo }}</div>
+                    style="z-index:1055; max-height:280px; overflow:auto;">
+
+                    <li v-for="s in suggestions" :key="s.id" class="list-group-item">
+
+                        <div class="d-flex align-items-center justify-content-between gap-2">
+                            <div class="flex-grow-1">
+                                <div class="fw-semibold">@{{ s.nombre }}</div>
+                                <div class="small text-muted">@{{ s.codigo }}</div>
+                            </div>
+
+                            <input type="number" min="1" v-model.number="s._cantidad"
+                                class="form-control form-control-sm" style="width:80px">
+
+                            <button class="btn btn-sm btn-success" @click="toggleSeleccion(s)">
+                                @{{ s._selected ? 'Quitar' : 'Añadir' }}
+                            </button>
+                        </div>
+                    </li>
+
+                    <li class="list-group-item text-center bg-light">
+                        <button class="btn btn-primary btn-sm" :disabled="!selectedItems.length" @click="addSeleccionados">
+                            Agregar seleccionados (@{{ selectedItems.length }})
+                        </button>
                     </li>
                 </ul>
             </div>
 
             <input type="number" v-model.number="cantidad" min="1" class="form-control w-auto ms-2"
                 style="width:90px">
-            <button class="btn btn-success ms-2" @click="addSelected" :disabled="!selected">Agregar</button>
 
             <button v-if="query && query.length >= 2 && !showSuggestions" @click="openPedidoModal({ codigo: query })"
                 class="btn btn-warning ms-2">Reportar: "@{{ query }}"</button>
@@ -64,9 +87,9 @@
                     </tr>
                 </thead>
                 <tbody>
-                    <tr v-for="item in herramientas" :key="item.id">
-                        <td>@{{ item.codigo ?? '—' }}</td>
-                        <td>@{{ item.nombre }}</td>
+                    <tr v-for="item in herramientas" :key="item.id_work_order_material">
+                        <td>@{{ item.codigo_material ?? '—' }}</td>
+                        <td>@{{ item.nombre_material }}</td>
                         <td>@{{ item.cantidad }}</td>
                         <td><button class="btn btn-sm btn-danger" @click="removeSelected(item)">Eliminar</button></td>
                     </tr>
@@ -128,8 +151,36 @@
                 </div>
             </div>
         </div>
-    </div>
 
+
+
+        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:3000">
+            <div v-for="(toast, index) in toasts"
+                :key="index"
+                class="toast show shadow mb-2"
+                role="alert">
+
+                <div class="toast-header">
+                    <strong class="me-auto">@{{ toast.title }}</strong>
+                    <small class="text-muted">ahora</small>
+                    <button type="button" class="btn-close"
+                            @click="removeToast(index)"></button>
+                </div>
+
+                <div class="toast-body">
+                    @{{ toast.message }}
+                </div>
+            </div>
+        </div>
+
+
+
+        <div class="toast-container position-fixed top-0 end-0 p-3"
+            style="z-index: 3000"
+            id="toast-container">
+        </div>
+
+    </div>
 
 
     <!-- JS: Vue 3 (CDN) y Bootstrap JS si tu layout NO lo incluye -->
@@ -147,6 +198,7 @@
                 data() {
                     return {
                         query: '',
+                        toasts: [],
                         suggestions: [],
                         showSuggestions: false,
                         focusedIndex: -1,
@@ -172,19 +224,34 @@
                     const root = document.getElementById('asignar-herramienta-app');
                     this.orderId = root ? root.dataset.orderId || null : null;
 
-                    // asegurar valor inicial del hidden (v-model)
                     this.pedidoForm.orden_trabajo_id = this.orderId;
 
-                    // inicializar modal bootstrap SIN moverlo al body (si ya lo moviste, ver nota abajo)
                     const modalEl = document.getElementById('pedidoModalBootstrap');
                     if (modalEl) {
                         this.pedidoModalInstance = new bootstrap.Modal(modalEl, {
                             backdrop: true,
                             keyboard: true
                         });
+                    }
 
+                    // 🔥 CARGAR MATERIALES ASIGNADOS AL INICIAR
+                    this.refreshHerramientas();
+
+
+                    if (window.Echo) {
+                        window.Echo.private('admin-channel')
+                            .listen('.material.solicitado', (payload) => {
+                                this.pushToast(payload);
+                            });
                     }
                 },
+
+                computed: {
+                    selectedItems() {
+                        return this.suggestions.filter(s => s._selected);
+                    }
+                },
+
                 methods: {
                     onInput() {
                         this.selected = null;
@@ -215,10 +282,11 @@
                             const data = await res.json();
                             let items = Array.isArray(data) ? data : (data?.data ?? []);
                             this.suggestions = items.map(x => ({
-                                id: x.id_material ?? x.id ?? null,
+                                id: x.id_material ?? x.id,
                                 nombre: x.nombre_material ?? x.nombre ?? '',
                                 codigo: x.codigo_material ?? x.codigo ?? '',
-                                cantidad: x.cantidad ?? 0
+                                _cantidad: 1,
+                                _selected: false
                             }));
                             this.showSuggestions = this.suggestions.length > 0;
                         } catch (err) {
@@ -229,13 +297,71 @@
                     },
                     selectSuggestion(s) {
                         this.selected = s;
-                        this.query = s.nombre + (s.codigo ? ' — ' + s.codigo : '');
-                        this.showSuggestions = false;
-
-                        this.pedidoForm.orden_trabajo_id = this.orderId; // <- importante
-                        this.pedidoForm.codigo = s.codigo ?? '';
-                        this.pedidoForm.nombre = s.nombre ?? '';
+                        // agregar inmediatamente
+                        this.addSelected(true);
                     },
+
+                    async addSelected(fromClick = false) {
+                        if (!this.selected) return;
+
+                        if (!this.orderId) {
+                            alert('No se encontró el id de la orden.');
+                            return;
+                        }
+
+                        const existente = this.herramientas.find(
+                            h => (h.id_material ?? h.id) === this.selected.id
+                        );
+
+                        const payload = {
+                            herramienta_id: this.selected.id,
+                            cantidad: this.cantidad
+                        };
+
+                        try {
+                            const token = document.querySelector('meta[name="csrf-token"]')?.content;
+                            const root = document.getElementById('asignar-herramienta-app');
+                            const addBase = root.dataset.addUrl.replace(/\/$/, '');
+                            const addUrl = `${addBase}/${this.orderId}`;
+
+                            const res = await fetch(addUrl, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'Accept': 'application/json',
+                                    'X-CSRF-TOKEN': token
+                                },
+                                body: JSON.stringify(payload)
+                            });
+
+                            const json = await res.json();
+
+                            if (!res.ok || !json.success) {
+                                alert(json?.message || 'Error al agregar material');
+                                return;
+                            }
+
+                            // 🔁 SI YA EXISTE → SUMA
+                            if (existente) {
+                                existente.cantidad += this.cantidad;
+                            } else {
+                                await this.refreshHerramientas();
+                            }
+
+                            // limpiar SOLO lo necesario
+                            this.selected = null;
+                            this.query = '';
+                            this.suggestions = [];
+                            this.showSuggestions = false;
+                            this.cantidad = 1;
+
+                        } catch (e) {
+                            console.error(e);
+                            alert('Error al comunicarse con el servidor');
+                        }
+                    },
+
+
                     focusNext() {
                         if (!this.suggestions.length) return;
                         this.focusedIndex = (this.focusedIndex + 1) % this.suggestions.length;
@@ -246,50 +372,12 @@
                             .length;
                     },
                     selectFocused() {
-                        if (this.focusedIndex >= 0 && this.suggestions[this.focusedIndex]) this
-                            .selectSuggestion(this.suggestions[this.focusedIndex]);
-                    },
-
-                    async addSelected() {
-                        if (!this.selected) return alert('Selecciona una herramienta primero.');
-                        if (!this.orderId) return alert('No se encontró el id de la orden.');
-                        const payload = {
-                            herramienta_id: this.selected.id,
-                            cantidad: this.cantidad
-                        };
-                        try {
-                            const token = document.querySelector('meta[name="csrf-token"]')?.getAttribute(
-                                'content') || '';
-                            const root = document.getElementById('asignar-herramienta-app');
-                            const addBase = root ? root.dataset.addUrl || '' : '';
-                            const addUrl = addBase.replace(/\/$/, '') + '/' + encodeURIComponent(this
-                                .orderId);
-                            const res = await fetch(addUrl, {
-                                method: 'POST',
-                                headers: {
-                                    'Content-Type': 'application/json',
-                                    'Accept': 'application/json',
-                                    'X-CSRF-TOKEN': token
-                                },
-                                body: JSON.stringify(payload)
-                            });
-                            if (!res.ok) {
-                                const err = await res.json().catch(() => null);
-                                return alert('Error al agregar. Revisa la consola.');
-                            }
-                            const json = await res.json();
-                            if (json.success) {
-                                this.herramientas.unshift(json.item);
-                                this.query = '';
-                                this.selected = null;
-                                this.suggestions = [];
-                                this.cantidad = 1;
-                            } else alert('No se pudo agregar la herramienta.');
-                        } catch (e) {
-                            console.error(e);
-                            alert('Error al comunicarse con el servidor.');
+                        if (this.focusedIndex >= 0) {
+                            this.selected = this.suggestions[this.focusedIndex];
+                            this.addSelected();
                         }
                     },
+
 
                     async removeSelected(item) {
                         if (!item || !item.id) return;
@@ -342,7 +430,7 @@
                     },
 
                     async submitPedido() {
-                      
+
                         if (!this.pedidoForm.nombre || !this.pedidoForm.nombre.trim()) {
                             return alert('Ingrese nombre o descripción del material.');
                         }
@@ -354,26 +442,26 @@
                                 'content') || '';
                             const root = document.getElementById('asignar-herramienta-app');
                             const pedidoBase = root ? root.dataset.pedidoBase || '' : '';
-                            const url = pedidoBase.replace(/\/$/, '') + '/' + encodeURIComponent(this
-                                .orderId) + '/pedido-material';
+                            const url = root.dataset.pedidoUrl;
 
                             const payload = {
-                                orden_trabajo_id: this.pedidoForm.orden_trabajo_id || this.orderId,
-                                codigo: this.pedidoForm.codigo ? this.pedidoForm.codigo
-                                    .trim() : null,
-                                nombre: this.pedidoForm.nombre.trim(),
-                                cantidad: this.pedidoForm.cantidad || 1,
-                                observacion: this.pedidoForm.observacion ? this.pedidoForm.observacion
-                                    .trim() : null
+                                _token: token,
+                                orden_trabajo_id: this.orderId,
+                                codigo_material: this.pedidoForm.codigo || null,
+                                nombre_material: this.pedidoForm.nombre,
+                                cantidad: this.pedidoForm.cantidad,
+                                observacion: this.pedidoForm.observacion
                             };
 
 
                             const res = await fetch(url, {
                                 method: 'POST',
+                                credentials: 'same-origin', // 🔥 CLAVE ABSOLUTA
                                 headers: {
                                     'Content-Type': 'application/json',
                                     'Accept': 'application/json',
-                                    'X-CSRF-TOKEN': token
+                                    'X-CSRF-TOKEN': token,
+                                    'X-Requested-With': 'XMLHttpRequest'
                                 },
                                 body: JSON.stringify(payload)
                             });
@@ -410,6 +498,95 @@
                             observacion: ''
                         };
                     },
+
+                    toggleSeleccion(item) {
+                        item._selected = !item._selected;
+                    },
+
+                    async addSeleccionados() {
+                        if (!this.orderId || !this.selectedItems.length) return;
+
+                        const token = document.querySelector('meta[name="csrf-token"]').content;
+                        const root = document.getElementById('asignar-herramienta-app');
+                        const addBase = root.dataset.addUrl.replace(/\/$/, '');
+                        const url = `${addBase}/${this.orderId}`;
+
+                        for (const item of this.selectedItems) {
+
+                            const existente = this.herramientas.find(
+                                h => (h.id_material ?? h.id) === item.id
+                            );
+
+                            const payload = {
+                                herramienta_id: item.id,
+                                cantidad: item._cantidad || 1
+                            };
+
+                            try {
+                                const res = await fetch(url, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'Accept': 'application/json',
+                                        'X-CSRF-TOKEN': token
+                                    },
+                                    body: JSON.stringify(payload)
+                                });
+
+                                const json = await res.json();
+
+                                if (!res.ok || !json.success) {
+                                    console.error(json?.message || 'Error al agregar');
+                                    continue;
+                                }
+
+                                if (existente) {
+                                    existente.cantidad += payload.cantidad;
+                                } else {
+                                    await this.refreshHerramientas();
+                                }
+
+                            } catch (e) {
+                                console.error(e);
+                            }
+                        }
+
+                        // limpiar estado visual
+                        this.suggestions = [];
+                        this.query = '';
+                        this.showSuggestions = false;
+                    },
+
+                    async refreshHerramientas() {
+                        const root = document.getElementById('asignar-herramienta-app');
+                        const url = root.dataset.materialsUrl;
+
+                        const res = await fetch(url, {
+                            headers: {
+                                'Accept': 'application/json'
+                            }
+                        });
+
+                        this.herramientas = await res.json();
+                    },
+
+
+                    pushToast(payload) {
+                        this.toasts.unshift({
+                            title: payload.title,
+                            message: payload.message
+                        });
+
+                        // Auto cerrar
+                        setTimeout(() => {
+                            this.toasts.pop();
+                        }, 8000);
+                    },
+
+                    removeToast(index) {
+                        this.toasts.splice(index, 1);
+                    }
+
                 }
             }).mount('#asignar-herramienta-app');
         })();

@@ -43,9 +43,28 @@
             transition: padding-left .2s ease;
         }
 
-        .navbar-toggler{
+        .navbar-toggler {
             margin-left: -30px;
         }
+
+
+        @keyframes slide-in {
+            from {
+                transform: translateX(120%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .animate-slide-in {
+            animation: slide-in 0.35s ease-out;
+        }
+
+
+
     </style>
 
 
@@ -73,14 +92,55 @@
         <nav class="flex-1 p-3 space-y-1 ">
 
 
+            {{-- SECCIÓN MENÚ --}}
             <div class="px-2 text-xs uppercase text-zinc-500 mb-2">Menú</div>
+
+            {{-- DASHBOARD --}}
             <a href="{{ route('dashboard') }}"
-                class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('dashboard') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                class="block rounded-lg px-3 py-2 text-sm
+   {{ request()->routeIs('dashboard') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
                 Dashboard
             </a>
 
+            {{-- ÓRDENES DE TRABAJO --}}
+            @php
+                $otActive = request()->routeIs('ordenes.trabajo.*');
+            @endphp
+
+            <div class="space-y-1">
+                {{-- TÍTULO --}}
+                <button type="button"
+                    class="w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm
+        {{ $otActive ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                    <span class="flex items-center gap-2">
+                        <i class="fa-solid fa-clipboard-list text-xs"></i>
+                        Órdenes de trabajo
+                    </span>
+                    <i class="fa-solid fa-chevron-down text-[10px] {{ $otActive ? 'rotate-180' : '' }}"></i>
+                </button>
+
+                {{-- SUBMENÚ --}}
+                <div class="ml-6 space-y-1 text-sm">
+
+                    <a href="{{ route('ordenes.trabajo.asignar') }}"
+                        class="block rounded-md px-3 py-1.5
+                            {{ request()->routeIs('ordenes.trabajo.asignar') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                        Asignar OT
+                    </a>
+
+                    <a href="{{ route('ordenes.trabajo.asignadas') }}"
+                        class="block rounded-md px-3 py-1.5
+                            {{ request()->routeIs('ordenes.trabajo.asignadas') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                        Asignadas
+                    </a>
+
+                </div>
+            </div>
+
+            {{-- USUARIOS --}}
             <a href="{{ route('users.index') }}"
-                class="block rounded-lg px-3 py-2 text-sm {{ request()->routeIs('users.index') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                class="block rounded-lg px-3 py-2 text-sm
+   {{ request()->routeIs('users.index') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
                 Usuarios
             </a>
 

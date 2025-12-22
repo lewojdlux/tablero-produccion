@@ -5,6 +5,20 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Http\Request;
 
 
+use Illuminate\Support\Facades\App;
+use Illuminate\Support\Facades\Broadcast;
+
+
+use App\Http\Controllers\OrdenesTrabajoController;
+use App\Http\Controllers\AsignarMaterialController;
+
+
+
+Broadcast::routes([
+    'middleware' => ['auth']
+]);
+
+
 Route::middleware('guest')->group(function () {
     Route::get('/login', \App\Livewire\Auth\Login::class)->name('login');
 });
@@ -16,6 +30,8 @@ Route::post('/logout', function (Request $request) {
     $request->session()->regenerateToken();
     return to_route('login');
 })->middleware('auth')->name('logout');
+
+
 
 
 /**
@@ -46,8 +62,36 @@ Route::middleware(['auth', 'perfil:1,2'])
 
         Route::get('/settings/password', \App\Livewire\User\Password::class)
             ->name('settings.password');
-});
 
+
+        Route::get('/ordenes-trabajo/asignar', [OrdenesTrabajoController::class, 'index'])->name('ordenes.trabajo.asignar');
+        Route::post('/ordenes-trabajo/asignar', [OrdenesTrabajoController::class, 'store'])->name('ordenes.trabajo.store');
+        Route::get('/pedidos-materiales/{pedido}', [OrdenesTrabajoController::class, 'show'])->name('pedidos.materiales.show');
+        Route::get('/ordenes-trabajo/crear', [OrdenesTrabajoController::class, 'create'])->name('workorders.create');
+
+
+        Route::get('/ordenes-trabajo/asignados', [OrdenesTrabajoController::class, 'indexAsignados'])->name('ordenes.trabajo.asignadas');
+
+
+
+
+        Route::get('/pedidos-materiales/orden-trabajo/{orderId}', [OrdenesTrabajoController::class, 'verPedidoMaterial'])->name('pedidos.materiales.byOrden');
+
+        Route::get('/ordenes-trabajo/{workorder}', [OrdenesTrabajoController::class, 'verOrden'])->name('workorders.show');
+
+        Route::post('/notificaciones/{notification}/leer', function ($notification) {
+            auth()->user()
+                ->notifications()
+                ->where('id', $notification)
+                ->update(['read_at' => now()]);
+
+            return response()->json(['ok' => true]);
+        })->name('notificaciones.leer');
+
+
+
+
+});
 
 
 /**
@@ -75,6 +119,33 @@ Route::middleware(['auth', 'perfil:4,5'])
         Route::get('/settings/password', \App\Livewire\User\Password::class)
             ->name('settings.password');*/
 });
+
+
+
+Route::middleware(['auth', 'perfil:7'])
+    ->group(function () {
+
+    Route::get('/ordenes/trabajo/asignados', [OrdenesTrabajoController::class, 'indexAsignados'])->name('ordenes.trabajo.asignados');
+    Route::post('/ordenes-trabajo/{workorder}/start', [OrdenesTrabajoController::class, 'start'])->name('workorders.start');
+    Route::get('/ordenes-trabajo/{id}/materials',[OrdenesTrabajoController::class, 'indexMaterialesOrdenes'])->name('workorders.materials');
+
+
+
+    Route::get('buscar-material', [OrdenesTrabajoController::class, 'buscarMaterial'])->name('herramientas.search');
+
+    Route::post('/registrar/herramienta/{workorder}',[OrdenesTrabajoController::class, 'asignarMaterial'])->name('workorders.materials.asignar');
+
+    Route::post('/pedidos-materiales/{pedido}/asignar', [OrdenesTrabajoController::class, 'solicitarMaterial'])->name('pedidos.materiales.asignar');
+
+
+});
+
+
+
+
+
+
+
 
 
 Route::post('/logout', function (Request $request) {

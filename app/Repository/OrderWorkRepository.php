@@ -44,7 +44,8 @@ class OrderWorkRepository
 
         // ADMIN (1,2) → Ver todo SIN restricciones
         if (in_array($perfil, [1, 2], true)) {
-            return $this->orderWorkModel->with('instalador')->orderBy('status', 'desc')->paginate(15);
+            return $this->orderWorkModel->with('instalador')->withCount('pedidosMateriales')
+            ->orderBy('status', 'desc')->paginate(15);
         }
 
         // INSTALADOR → traer solo sus órdenes
@@ -76,6 +77,7 @@ class OrderWorkRepository
         ->select(
             'wom.id_work_order_material',
             'wom.material_id as id_material',
+            'm.codigo_material',
             'm.nombre_material',
             'wom.cantidad'
         )

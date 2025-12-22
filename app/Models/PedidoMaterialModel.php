@@ -9,7 +9,7 @@ class PedidoMaterialModel extends Model
     //
     protected $table = 'pedidos_materiales';
     protected $primaryKey = 'id_pedido_material';
-    public $timestamps = true;
+    public $timestamps = false;
 
     // Campos asignables en masa
     protected $fillable = [
@@ -51,5 +51,25 @@ class PedidoMaterialModel extends Model
         return $this->belongsTo(OrderWorkModel::class, 'orden_trabajo_id', 'id_work_order');
     }
 
-   
+
+    public function items()
+    {
+        return $this->hasMany(
+            PedidoMaterialItemModel::class,
+            'pedido_material_id',     // FK en pedidos_materiales_item
+            'id_pedido_material'      // PK en pedidos_materiales
+        );
+    }
+
+    public function instalador()
+    {
+        return $this->belongsTo(
+            InstaladorModel::class,
+            'instalador_id',     // FK en pedidos_materiales
+            'id_instalador'      // PK en instalador
+        );
+    }
+
+
+
 }

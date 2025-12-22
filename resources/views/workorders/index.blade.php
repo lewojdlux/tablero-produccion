@@ -145,6 +145,7 @@
 
 
 @push('scripts')
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
     <script>
         window.WORKORDERS = @json($dataMatrial->items());
 
@@ -236,6 +237,8 @@
                             },
                             body: JSON.stringify(this.form)
                         });
+
+
 
                         const json = await resp.json();
                         if (json.success) {

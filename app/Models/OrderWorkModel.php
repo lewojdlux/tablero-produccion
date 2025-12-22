@@ -16,8 +16,7 @@ class OrderWorkModel extends Model
         'pedido',
         'tercero',
         'vendedor',
-        'vendedor_username',
-        'tecnico_work_orders',
+        'instalador_id',
         'periodo',
         'ano',
         'n_factura',
@@ -45,7 +44,7 @@ class OrderWorkModel extends Model
     public function instalador()
     {
         // foreign key on this model, owner key on InstaladorModel
-        return $this->belongsTo(InstaladorModel::class, 'tecnico_work_orders', 'id_instalador');
+        return $this->belongsTo(InstaladorModel::class, 'instalador_id', 'id_instalador');
     }
 
     /**
@@ -112,4 +111,6 @@ class OrderWorkModel extends Model
     {
         return $this->hasMany(PedidoMaterialModel::class, 'orden_trabajo_id', 'id_work_order');
     }
+
+
 }

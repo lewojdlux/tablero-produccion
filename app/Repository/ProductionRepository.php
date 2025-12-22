@@ -759,4 +759,42 @@ class ProductionRepository
 
         return ['header' => $hdr, 'lines' => $lines];
     }
+
+    public function getOrdenesTrabajo()
+    {
+        return \DB::connection('sqlsrv')
+            ->table('TblDocumentos as t')
+            ->join('TblTerceros as tc', 't.StrTercero', '=', 'tc.StrIdTercero')
+            ->join('TblVendedores as tv', 't.StrDVendedor', '=', 'tv.StrIdVendedor')
+            ->leftJoin('TblDetalleDocumentos as d', function ($join) {
+                $join->on('d.IntDocRefD', '=', 't.IntDocumento')->where('d.IntTransaccion', 104); // FACTURA
+            })
+            ->where('t.IntTransaccion', 109) // PEDIDO
+            ->where('t.IntEstado', 0)
+            ->select([
+                // ===== LO QUE VE LA TABLA =====
+                't.IntDocumento        as n_documento',
+                'tc.StrNombre          as tercero',
+                'tv.StrNombre          as vendedor',
+
+                // ===== DATOS DE SOPORTE PARA OT =====
+                'tv.StrIdVendedor      as vendedor_username',
+                't.IntPeriodo          as periodo',
+                't.IntAno              as ano',
+
+                // ===== FACTURACIÓN =====
+                'd.IntDocumento        as n_factura',
+                \DB::raw("
+                CASE
+                    WHEN d.IntDocumento IS NOT NULL
+                    THEN 'FACTURADO'
+                    ELSE 'NO FACTURADO'
+                END AS estado
+            "),
+            ])
+            ->orderByDesc('t.IntAno')
+            ->orderByDesc('t.IntPeriodo')
+            ->orderByDesc('t.IntDocumento')
+            ->paginate(10); // IMPORTANTE: usas ->links()
+    }
 }

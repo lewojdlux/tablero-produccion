@@ -7,7 +7,16 @@ use Illuminate\Foundation\Configuration\Middleware;
 use App\Http\Middleware\EnsurePerfil;
 use App\Http\Middleware\RedirectIfAuthenticatedByPerfil;
 
+
+use Illuminate\Broadcasting\BroadcastServiceProvider;
+use App\Providers\BroadcastServiceProvider as AppBroadcastServiceProvider;
+
 return Application::configure(basePath: dirname(__DIR__))
+
+    ->withProviders([
+        BroadcastServiceProvider::class,      // Provider de Laravel
+        AppBroadcastServiceProvider::class,   // Tu provider
+    ])
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
