@@ -16,7 +16,7 @@
 
 </style>
 
-<div class="space-y-6" v-cloak>
+<div id="app" v-cloak class="space-y-6">
 
     {{-- HEADER --}}
     <div class="flex items-center justify-between">
