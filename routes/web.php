@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Broadcast;
 
 use App\Http\Controllers\OrdenesTrabajoController;
 use App\Http\Controllers\AsignarMaterialController;
+use App\Http\Controllers\SolicitudesController;
 use App\Http\Controllers\SeguimientoCrmController;
 
 
@@ -125,6 +126,12 @@ Route::middleware(['auth', 'perfil:1,2'])
             Route::get('/seguimiento/data', [SeguimientoCrmController::class, 'data'])
                 ->name('portal-crm.seguimiento.data');
         });
+
+
+        Route::get('/ordenes-trabajo/solicitudes', [SolicitudesController::class, 'solicitudes'])->name('solicitudes.index');
+        Route::get('/ordenes-trabajo/solicitudes/crear/{id}', [SolicitudesController::class, 'create'])->name('solicitudes.create');
+        Route::post('/ordenes-trabajo/solicitudes/registrar', [SolicitudesController::class, 'store'])->name('solicitudes.store');
+
 
 
 

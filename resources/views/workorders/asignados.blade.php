@@ -142,10 +142,13 @@
                                     <!-- VER SOLICITUD DE MATERIAL -->
                                     <button v-if="workOrder.pedidos_materiales_count > 0" class="btn btn-primary btn-sm"
                                         title="Ver solicitud de material"
-                                        @click="verPedidoMaterial(workOrder.id_work_order)">
-                                        <i class="fas fa-box-open me-1"></i>
-                                        Solicitud
+                                        @click="irCargarSolicitud(workOrder.id_work_order)">
+                                        <i class="fas fa-file-excel me-1"></i>
+                                        Cargar solicitud (Excel)
                                     </button>
+
+
+
                                 @elseif ($isInstalador)
                                     <!-- ASIGNAR MATERIAL -->
                                     <button v-if="workOrder.status === 'in_progress'"
@@ -219,12 +222,13 @@
 
 
 
+
     <script>
         const routePedidoMaterial = "{{ route('pedidos.materiales.byOrden', ':id') }}";
         const routeVerOT = "{{ route('workorders.show', ':id') }}";
         const routeAsignarMaterial = "{{ route('workorders.materials', ':id') }}";
         const routePedidoShow = "{{ route('pedidos.materiales.show', ':id') }}";
-
+        const routeSolicitudCreate = "{{ route('solicitudes.create', ':id') }}";
 
         window.AUTH_USER_ID = {{ auth()->id() }};
 
@@ -410,6 +414,16 @@
                             window.focus();
                             window.location.href = `/pedidos-materiales/${payload.pedido_id}`;
                         };
+                    },
+
+                    irCargarSolicitud(id) {
+                        if (!id) {
+                            alert('No existe pedido de material asociado');
+                            return;
+                        }
+
+                        window.location.href =
+                            routeSolicitudCreate.replace(':id', id);
                     }
 
                 }

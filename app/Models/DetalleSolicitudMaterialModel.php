@@ -14,8 +14,11 @@ class DetalleSolicitudMaterialModel extends Model
     protected $fillable = [
         'solicitud_material_id',
         'codigo_material',
+        'descripcion_material',
         'cantidad',
         'precio_unitario',
+        'iva',
+        'descuento',
         'total',
         'fecha_registro',
         'user_reg',

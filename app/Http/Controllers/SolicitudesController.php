@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
-
-
+use App\Models\InstaladorModel;
+use App\Models\OrderWorkModel;
+use App\Models\SolicitudMaterialModel;
+use App\Services\OrderWorkService;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
@@ -15,11 +17,18 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 class SolicitudesController
 {
     protected $dataSolicitudes;
+    protected OrderWorkService $orderWorkService;
 
-    public function __construct(SolicitudService $dataSolicitudes)
+    public function __construct(SolicitudService $dataSolicitudes, OrderWorkService $orderWorkService)
     {
         $this->dataSolicitudes = $dataSolicitudes;
+        $this->orderWorkService = $orderWorkService;
     }
+
+
+
+
+
 
     // Traer todas las solicitudes
     public function solicitudes()
@@ -39,6 +48,29 @@ class SolicitudesController
         return view('Solicitudes.ver', [
             'solicitud' => $solicitud,
         ]);
+    }
+
+
+    public function create($id){
+
+
+
+        $ordenTrabajo = OrderWorkModel::with(['instalador', 'pedidosMateriales.instalador', 'pedidosMateriales.items'])->findOrFail($id);
+
+
+        if ($ordenTrabajo == null ) {
+            return redirect()->route('solicitudes.index')->with('error', 'Solicitud no encontrada');
+
+        }
+
+
+        return view('Solicitudes.crear', [
+            'ordenTrabajo' => $ordenTrabajo
+        ]);
+
+
+
+
     }
 
     // 🔹 Subir archivo Excel

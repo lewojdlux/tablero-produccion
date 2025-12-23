@@ -6,67 +6,58 @@
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>{{ $title ?? config('app.name', 'App') }}</title>
 
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css"
-        integrity="sha384-xOolHFLEh07PJGoPkLv1IbcEPTNtaed2xpHsD9ESMhqIYd0nLMwNLD69Npy4HI+N" crossorigin="anonymous">
+    {{-- Bootstrap --}}
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
 
-
+    {{-- Estilos base --}}
     <style>
-        /* Control del ancho del sidebar con variable */
-        :root {
-            --sb-w: 0;
-        }
+        :root { --sb-w: 0; }
 
-        /* móvil: 0 por defecto */
         @media (min-width: 768px) {
-            :root {
-                --sb-w: 18rem;
-            }
-
-            /* desktop: abierto = 18rem */
-            body.sidebar-closed {
-                --sb-w: 0;
-            }
-
-            /* desktop: cerrado = 0 */
-            body.sidebar-closed #app-sidebar {
-                display: none !important;
-            }
+            :root { --sb-w: 18rem; }
+            body.sidebar-closed { --sb-w: 0; }
+            body.sidebar-closed #app-sidebar { display: none !important; }
         }
 
-        /* Forzar que aside y contenido usen la variable */
-        #app-sidebar {
-            width: var(--sb-w);
-        }
-
+        #app-sidebar { width: var(--sb-w); }
         #main-shell {
             padding-left: var(--sb-w);
             transition: padding-left .2s ease;
         }
 
-        .navbar-toggler {
-            margin-left: -30px;
+        /* Sidebar compacto */
+        #app-sidebar nav a,
+        #app-sidebar nav button {
+            padding: .45rem .75rem !important;
+            font-size: .875rem;
         }
 
-
-        @keyframes slide-in {
-            from {
-                transform: translateX(120%);
-                opacity: 0;
-            }
-            to {
-                transform: translateX(0);
-                opacity: 1;
-            }
+        #app-sidebar nav .ml-6 a {
+            padding: .35rem .75rem !important;
+            font-size: .8rem;
         }
 
-        .animate-slide-in {
-            animation: slide-in 0.35s ease-out;
+        #app-sidebar nav .space-y-1 > * {
+            margin-bottom: .15rem !important;
         }
 
+        #app-sidebar nav .uppercase {
+            font-size: .65rem;
+            margin-bottom: .25rem;
+        }
 
-
+        /* Scroll interno del menú */
+        #app-sidebar nav {
+            overflow-y: auto;
+            scrollbar-width: thin;
+        }
+        #app-sidebar nav::-webkit-scrollbar { width: 5px; }
+        #app-sidebar nav::-webkit-scrollbar-thumb {
+            background: #d1d5db;
+            border-radius: 10px;
+        }
     </style>
-
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     @livewireStyles
@@ -74,186 +65,182 @@
 
 <body class="min-h-screen bg-white text-zinc-900">
 
-    {{-- SIDEBAR FIJO (pegado a la izquierda) --}}
-    <aside id="app-sidebar"
-        class="fixed inset-y-0 left-0 z-40 hidden w-72 border-r border-zinc-200 bg-white md:flex md:flex-col">
-        {{-- Logo / encabezado del sidebar --}}
-        <div class="h-16 flex items-center px-4 border-b border-zinc-200">
-            <a href="{{ route('dashboard') }}" class="font-semibold">
+@php
+    $perfil = (int) (auth()->user()->perfil_usuario_id ?? 0);
+    $isAdmin = in_array($perfil, [1,2], true);
+    $isAsesor = $perfil === 5;
+    $isInstalador = $perfil === 7;
+    $isAdminInstalador =  $perfil === 6;
+@endphp
 
-                {{ config('app.name', 'App') }}
-            </a>
+{{-- SIDEBAR --}}
+<aside id="app-sidebar"
+       class="fixed inset-y-0 left-0 z-40 hidden md:flex md:flex-col
+              w-72 border-r border-zinc-200 bg-white">
 
-
-
-        </div>
-
-        {{-- Navegación del sidebar --}}
-        <nav class="flex-1 p-3 space-y-1 ">
-
-            @php
-                $perfil = (int) (auth()->user()->perfil_usuario_id ?? 0);
-                $isAdmin = in_array($perfil, [1, 2], true);
-                $isInstalador = $perfil === 6;
-                $isAsesor = $perfil === 5;
-            @endphp
-
-
-            {{-- SECCIÓN MENÚ --}}
-            <div class="px-2 text-xs uppercase text-zinc-500 mb-2">Menú</div>
-
-            {{-- DASHBOARD --}}
-            <a href="{{ route('dashboard') }}"
-                class="block rounded-lg px-3 py-2 text-sm
-                {{ request()->routeIs('dashboard') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                Dashboard
-            </a>
-
-            {{-- ÓRDENES DE TRABAJO --}}
-            @php
-                $otActive = request()->routeIs('ordenes.trabajo.*');
-            @endphp
-
-            <div class="space-y-1">
-                {{-- TÍTULO --}}
-                <button type="button"
-                    class="w-full flex items-center justify-between rounded-lg px-3 py-2 text-sm
-                    {{ $otActive ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                    <span class="flex items-center gap-2">
-                        <i class="fa-solid fa-clipboard-list text-xs"></i>
-                        Órdenes de trabajo
-                    </span>
-                    <i class="fa-solid fa-chevron-down text-[10px] {{ $otActive ? 'rotate-180' : '' }}"></i>
-                </button>
-
-                {{-- SUBMENÚ --}}
-                <div class="ml-6 space-y-1 text-sm">
-
-                    <a href="{{ route('ordenes.trabajo.asignar') }}"
-                        class="block rounded-md px-3 py-1.5
-                            {{ request()->routeIs('ordenes.trabajo.asignar') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                        Asignar OT
-                    </a>
-
-                    <a href="{{ route('ordenes.trabajo.asignadas') }}"
-                        class="block rounded-md px-3 py-1.5
-                            {{ request()->routeIs('ordenes.trabajo.asignadas') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                        Asignadas
-                    </a>
-
-                </div>
-            </div>
-
-            {{-- USUARIOS --}}
-            <a href="{{ route('users.index') }}"
-                class="block rounded-lg px-3 py-2 text-sm
-                {{ request()->routeIs('users.index') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                Usuarios
-            </a>
-
-
-            @if ($isAdmin || $isAsesor)
-                <a href="{{ route('portal-crm.seguimiento.index') }}"
-                class="block rounded-lg px-3 py-2 text-sm
-                {{ request()->routeIs('portal-crm.seguimiento.*') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                    Seguimiento CRM
-                </a>
-            @endif
-
-
-            {{-- Agrega aquí más enlaces de tu app --}}
-            {{-- <a href="{{ route('orders.index') }}" class="block rounded-lg px-3 py-2 text-sm hover:bg-zinc-100">Órdenes</a> --}}
-            {{-- <a href="{{ route('reports.index') }}" class="block rounded-lg px-3 py-2 text-sm hover:bg-zinc-100">Reportes</a> --}}
-        </nav>
-
-        {{-- BLOQUE DE USUARIO (anclado abajo) --}}
-        <livewire:user.badge />
-    </aside>
-
-    {{-- CONTENEDOR PRINCIPAL (desplazado por el sidebar fijo) --}}
-    <div id="main-shell" class="md:pl-72 min-h-screen flex flex-col">
-
-        {{-- HEADER SUPERIOR --}}
-        <header class="border-b border-zinc-200 bg-white">
-
-            <div class="h-16 px-4 flex items-center gap-4">
-
-                {{-- Tabs / navegación superior opcional --}}
-                <nav class="hidden md:flex items-center gap-2">
-
-                    <button class="navbar-toggler" type="button" data-toggle="collapse"
-                        data-target="#navbarSupportedContent" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation" id="toggleSidebarDesktop">
-                        <span class="navbar-toggler-icon"><i class="fa-solid fa-bars"></i></span>
-                    </button>
-
-                    {{-- Más tabs si quieres --}}
-                </nav>
-
-
-            </div>
-        </header>
-
-        {{-- CONTENIDO (section amplio) --}}
-        <main class="flex-1">
-            <section class="px-4 py-6">
-                <div class="rounded-xl border border-zinc-200 bg-white p-5">
-                    @isset($slot)
-                        {{ $slot }} {{-- Livewire Page Component --}}
-                    @else
-                        @yield('content') {{-- Vista Blade clásica --}}
-                    @endisset
-                </div>
-            </section>
-        </main>
-
-        {{-- FOOTER pequeño --}}
-        <footer class="border-t border-zinc-200">
-            <div class="h-10 px-4 flex items-center text-xs text-zinc-500">
-                © {{ date('Y') }} {{ config('app.name', 'App') }}
-            </div>
-        </footer>
+    {{-- Logo --}}
+    <div class="h-16 flex items-center px-4 border-b">
+        <a href="{{ route('dashboard') }}" class="font-semibold">
+            {{ config('app.name') }}
+        </a>
     </div>
 
+    {{-- NAV --}}
+    <nav class="flex-1 p-3 space-y-1">
 
-    @livewireScripts
+        <div class="px-2 text-xs uppercase text-zinc-500">Menú</div>
 
-
-    <!-- antes de </body> -->
-    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.min.js"></script>
-    <script src="https://kit.fontawesome.com/33667822a1.js" crossorigin="anonymous"></script>
-
-
-    <script>
-        (function() {
-            const body = document.body;
-            const btn = document.getElementById('toggleSidebarDesktop');
-
-            // restaurar estado guardado
-            try {
-                if (localStorage.getItem('sidebar-closed') === '1') {
-                    body.classList.add('sidebar-closed');
-                    btn?.setAttribute('aria-expanded', 'false');
-                }
-            } catch (e) {}
-
-            // click del botón: cerrar/abrir
-            btn?.addEventListener('click', function(e) {
-                e.preventDefault(); // ignoramos el data-target del navbar
-                const closed = body.classList.toggle('sidebar-closed');
-                this.setAttribute('aria-expanded', closed ? 'false' : 'true');
-                try {
-                    localStorage.setItem('sidebar-closed', closed ? '1' : '0');
-                } catch (e) {}
-            });
-        })();
-    </script>
+        {{-- Dashboard --}}
+        <a href="{{ route('dashboard') }}"
+           class="block rounded-lg
+           {{ request()->routeIs('dashboard') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+            Dashboard
+        </a>
 
 
-    @stack('scripts')
-    @stack('modals')
+        @if ($isAdmin || $isInstalador || $isAdminInstalador)
+
+            {{-- Órdenes de trabajo --}}
+            @php $otActive = request()->routeIs('ordenes.trabajo.*'); @endphp
+
+            <button type="button"
+                    onclick="toggleMenu('menu-ot')"
+                    class="w-full flex justify-between rounded-lg
+                    {{ $otActive ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                <span>Órdenes de trabajo</span>
+                <i class="fa-solid fa-chevron-down text-[10px]
+                {{ $otActive ? 'rotate-180' : '' }}"></i>
+            </button>
+
+            <div id="menu-ot"
+                class="ml-6 space-y-1 {{ $otActive ? '' : 'hidden' }}">
+                <a href="{{ route('ordenes.trabajo.asignar') }}"
+                class="block rounded-md
+                {{ request()->routeIs('ordenes.trabajo.asignar') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                    Asignar OT
+                </a>
+
+                <a href="{{ route('ordenes.trabajo.asignadas') }}"
+                class="block rounded-md
+                {{ request()->routeIs('ordenes.trabajo.asignadas') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                    Asignadas
+                </a>
+            </div>
+
+        @endif
+
+
+        @if ($isAdmin  || $isAdminInstalador)
+
+            {{-- Órdenes de trabajo --}}
+            @php $otActive = request()->routeIs('pedidos.materiales.*'); @endphp
+
+            <button type="button"
+                    onclick="toggleMenu('menu-solicitudes')"
+                    class="w-full flex justify-between rounded-lg
+                    {{ $otActive ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                <span>Solicitudes</span>
+                <i class="fa-solid fa-chevron-down text-[10px]
+                {{ $otActive ? 'rotate-180' : '' }}"></i>
+            </button>
+
+            <div id="menu-solicitudes"
+                class="ml-6 space-y-1 {{ $otActive ? '' : 'hidden' }}">
+
+                <a href="{{ route('solicitudes.index') }}"
+                class="block rounded-md
+                {{ request()->routeIs('solicitudes.index') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                    Realizadas
+                </a>
+            </div>
+
+        @endif
+
+        {{-- Usuarios --}}
+        @if ($isAdmin)
+            <a href="{{ route('users.index') }}"
+               class="block rounded-lg
+               {{ request()->routeIs('users.index') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                Usuarios
+            </a>
+        @endif
+
+        {{-- Comercial --}}
+        @if ($isAdmin || $isAsesor)
+            <div class="mt-4 px-2 text-[10px] uppercase text-zinc-400">
+                Comercial
+            </div>
+
+            <a href="{{ route('portal-crm.seguimiento.index') }}"
+               class="block rounded-lg
+               {{ request()->routeIs('portal-crm.seguimiento.*') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                Seguimiento CRM
+            </a>
+        @endif
+    </nav>
+
+    {{-- Usuario --}}
+    <livewire:user.badge />
+</aside>
+
+{{-- MAIN --}}
+<div id="main-shell" class="md:pl-72 min-h-screen flex flex-col">
+
+    {{-- Header --}}
+    <header class="border-b bg-white">
+        <div class="h-16 px-4 flex items-center">
+            <button id="toggleSidebarDesktop" class="navbar-toggler">
+                <i class="fa-solid fa-bars"></i>
+            </button>
+        </div>
+    </header>
+
+    {{-- Contenido --}}
+    <main class="flex-1">
+        <section class="px-4 py-6">
+            <div class="rounded-xl border bg-white p-5">
+                @isset($slot)
+                    {{ $slot }}
+                @else
+                    @yield('content')
+                @endisset
+            </div>
+        </section>
+    </main>
+
+    {{-- Footer --}}
+    <footer class="border-t">
+        <div class="h-10 px-4 flex items-center text-xs text-zinc-500">
+            © {{ date('Y') }} {{ config('app.name') }}
+        </div>
+    </footer>
+</div>
+
+@livewireScripts
+
+{{-- JS --}}
+<script src="https://kit.fontawesome.com/33667822a1.js" crossorigin="anonymous"></script>
+
+<script>
+    function toggleMenu(id) {
+        document.getElementById(id)?.classList.toggle('hidden');
+    }
+
+    (function () {
+        const body = document.body;
+        const btn = document.getElementById('toggleSidebarDesktop');
+
+        if (localStorage.getItem('sidebar-closed') === '1') {
+            body.classList.add('sidebar-closed');
+        }
+
+        btn?.addEventListener('click', function () {
+            const closed = body.classList.toggle('sidebar-closed');
+            localStorage.setItem('sidebar-closed', closed ? '1' : '0');
+        });
+    })();
+</script>
+
+@stack('scripts')
 </body>
-
 </html>
