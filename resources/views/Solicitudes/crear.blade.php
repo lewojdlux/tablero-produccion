@@ -53,7 +53,7 @@
 
     {{-- FORM --}}
     <form ref="form"
-      action="{{ route('solicitudes.store') }}"
+      action="{{ route('solicitudes.store', $ordenTrabajo->id_work_order) }}"
       method="POST"
       enctype="multipart/form-data"
       class="space-y-6"

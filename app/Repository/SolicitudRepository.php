@@ -4,19 +4,23 @@ namespace App\Repository;
 
 use App\Models\SolicitudMaterialModel;
 use App\Models\DetalleMaterialProveedor;
+use App\Models\DetalleSolicitudMaterialModel;
 
 class SolicitudRepository
 {
 
     protected $modelSolicitud = 'App\Models\SolicitudMaterialModel';
     protected $modelDetalleMaterialProveedor = 'App\Models\DetalleMaterialProveedor';
+    protected $modelDetalleSolicitudMaterial = 'App\Models\DetalleSolicitudMaterialModel';
 
 
     /// Constructor
-    public function __construct(SolicitudMaterialModel $modelSolicitud, DetalleMaterialProveedor $modelDetalleMaterialProveedor)
+    public function __construct(SolicitudMaterialModel $modelSolicitud, DetalleMaterialProveedor $modelDetalleMaterialProveedor,
+                                DetalleSolicitudMaterialModel $modelDetalleSolicitudMaterial)
     {
         $this->modelSolicitud = $modelSolicitud;
         $this->modelDetalleMaterialProveedor = $modelDetalleMaterialProveedor;
+        $this->modelDetalleSolicitudMaterial = $modelDetalleSolicitudMaterial;
     }
 
 
@@ -45,7 +49,7 @@ class SolicitudRepository
 
     public function storeMaterialRepository( $validated ) {
 
-        return  $this->modelDetalleMaterialProveedor::create($validated);
+        return  $this->modelDetalleSolicitudMaterial::create($validated);
     }
 
 }

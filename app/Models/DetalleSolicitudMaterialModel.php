@@ -18,6 +18,7 @@ class DetalleSolicitudMaterialModel extends Model
         'cantidad',
         'precio_unitario',
         'iva',
+        'iva_porcentaje',
         'descuento',
         'total',
         'fecha_registro',

@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\DetalleSolicitudMaterialModel;
 
 class SolicitudMaterialModel extends Model
 {
@@ -46,5 +47,14 @@ class SolicitudMaterialModel extends Model
         return $this->hasMany(\App\Models\DetalleMaterialProveedor::class, 'solicitud_material_id', 'id_solicitud_material');
     }
 
+
+    public function detalles()
+    {
+        return $this->hasMany(
+            DetalleSolicitudMaterialModel::class,
+            'solicitud_material_id',
+            'id_solicitud_material'
+        );
+    }
 
 }

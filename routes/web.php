@@ -130,7 +130,7 @@ Route::middleware(['auth', 'perfil:1,2'])
 
         Route::get('/ordenes-trabajo/solicitudes', [SolicitudesController::class, 'solicitudes'])->name('solicitudes.index');
         Route::get('/ordenes-trabajo/solicitudes/crear/{id}', [SolicitudesController::class, 'create'])->name('solicitudes.create');
-        Route::post('/ordenes-trabajo/solicitudes/registrar', [SolicitudesController::class, 'store'])->name('solicitudes.store');
+        Route::post('/ordenes-trabajo/solicitudes/{id}/registrar', [SolicitudesController::class, 'importExcel'])->name('solicitudes.store');
 
 
 

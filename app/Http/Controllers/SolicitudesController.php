@@ -10,10 +10,13 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
-
-
 use App\Services\SolicitudService;
 use PhpOffice\PhpSpreadsheet\IOFactory;
+use PhpOffice\PhpSpreadsheet\Spreadsheet;
+use Illuminate\Support\Str;
+
+use App\Models\ProveedorModel;
+
 class SolicitudesController
 {
     protected $dataSolicitudes;
@@ -24,11 +27,6 @@ class SolicitudesController
         $this->dataSolicitudes = $dataSolicitudes;
         $this->orderWorkService = $orderWorkService;
     }
-
-
-
-
-
 
     // Traer todas las solicitudes
     public function solicitudes()
@@ -50,27 +48,17 @@ class SolicitudesController
         ]);
     }
 
-
-    public function create($id){
-
-
-
+    public function create($id)
+    {
         $ordenTrabajo = OrderWorkModel::with(['instalador', 'pedidosMateriales.instalador', 'pedidosMateriales.items'])->findOrFail($id);
 
-
-        if ($ordenTrabajo == null ) {
+        if ($ordenTrabajo == null) {
             return redirect()->route('solicitudes.index')->with('error', 'Solicitud no encontrada');
-
         }
 
-
         return view('Solicitudes.crear', [
-            'ordenTrabajo' => $ordenTrabajo
+            'ordenTrabajo' => $ordenTrabajo,
         ]);
-
-
-
-
     }
 
     // 🔹 Subir archivo Excel
@@ -80,70 +68,90 @@ class SolicitudesController
             'archivo_excel' => 'required|file|mimes:xls,xlsx|max:5120',
         ]);
 
-        try {
-            $file = $request->file('archivo_excel');
-            $spreadsheet = IOFactory::load($file->getRealPath());
-            $sheet = $spreadsheet->getActiveSheet();
-            $rows = $sheet->toArray();
+        DB::beginTransaction();
 
-            $proveedorNombre = null;
-            $materiales = [];
+        $spreadsheet = IOFactory::load($request->file('archivo_excel')->getRealPath());
 
-            foreach ($rows as $index => $row) {
-                // Limpia valores (por si hay celdas nulas)
-                $row = array_map('trim', $row);
+        $sheet = $spreadsheet->getActiveSheet();
+        $rows = $sheet->toArray(null, true, true, true);
 
-                // Detectar el proveedor
-                if ($index === 0 && stripos($row[0], 'proveedor') !== false) {
-                    $proveedorNombre = $row[1] ?? null;
-                    continue;
-                }
+        $proveedorNombre = null;
+        $ivaGeneral = null;
+        $materiales = [];
 
-                // Saltar encabezado de columnas
-                if (isset($row[0]) && strcasecmp($row[0], 'Código') === 0) {
-                    continue;
-                }
+        foreach ($rows as $rowIndex => $row) {
+            $row = array_map(fn($v) => trim((string) $v), $row);
 
-                // Detectar filas vacías
-                if (empty($row[0]) || empty($row[1])) {
-                    continue;
-                }
-
-                // Cada fila representa un material
-                $codigo = $row[0];
-                $cantidad = floatval($row[1]);
-                $precio = floatval($row[2] ?? 0);
-                $total = $cantidad * $precio;
-
-                $materiales[] = [
-                    'solicitud_material_id' => $id,
-                    'codigo_material' => $codigo,
-                    'cantidad' => $cantidad,
-                    'precio_unitario' => $precio,
-                    'total' => $total,
-                    'fecha_registro' => now(),
-                    'user_reg' => Auth::user()->id,
-                ];
+            /**
+             * FILA 1
+             * proveedor | Juan Osorio | iva | | 19
+             */
+            if ($rowIndex === 1 && strcasecmp($row['A'], 'proveedor') === 0) {
+                $proveedorNombre = $row['B'] ?? null;
+                $ivaGeneral = (float) ($row['E'] ?? 0);
+                continue;
             }
 
-            // Si se detectó proveedor, puedes actualizarlo en la solicitud:
-            if ($proveedorNombre) {
-                $this->dataSolicitudes->updateProveedorService($id, $proveedorNombre);
+            /**
+             * FILA 3
+             * Encabezados
+             */
+            if ($rowIndex === 3) {
+                continue;
             }
 
-            // Insertar los materiales
-            foreach ($materiales as $material) {
-                $this->dataSolicitudes->storeMaterialService($material);
+            /**
+             * DATOS DESDE FILA 4
+             */
+            if ($rowIndex < 4 || empty($row['A'])) {
+                continue;
             }
 
-            return redirect()
-                ->route('solicitudes.show', $id)
-                ->with('success', 'Archivo importado correctamente. Proveedor: ' . ($proveedorNombre ?? 'No definido'));
-        } catch (\Exception $e) {
-            return redirect()
-                ->back()
-                ->with('error', 'Error al procesar el archivo: ' . $e->getMessage());
+            $cantidad = (float) $row['C'];
+            $precio = (float) $row['D'];
+
+            $materiales[] = [
+                'solicitud_material_id' => $id,
+                'codigo_material' => $row['A'],
+                'descripcion_material' => $row['B'],
+                'cantidad' => $cantidad,
+                'precio_unitario' => $precio,
+                'iva' => (float) $row['E'],
+                'iva_porcentaje' => $ivaGeneral,
+                'descuento' => 0,
+                'total' => $cantidad * $precio,
+                'fecha_registro' => now(),
+                'user_reg' => Auth::id(),
+            ];
         }
+
+        /**
+         * PROVEEDOR
+         * SOLO SE ASOCIA, NO SE CREA
+         */
+        if ($proveedorNombre) {
+            $proveedor = ProveedorModel::where('name_supplier', $proveedorNombre)->first();
+
+            if (!$proveedor) {
+                DB::rollBack();
+                return redirect()
+                    ->back()
+                    ->with('error', 'El proveedor "' . $proveedorNombre . '" no existe. Debe crearlo antes.');
+            }
+
+            $this->dataSolicitudes->updateProveedorService($id, $proveedor->id_supplier);
+        }
+
+        /**
+         * INSERTAR DETALLES
+         */
+        foreach ($materiales as $material) {
+            $this->dataSolicitudes->storeMaterialService($material);
+        }
+
+        DB::commit();
+
+        return redirect()->route('solicitudes.show', $id)->with('success', 'Solicitud importada correctamente.');
     }
 
     // 🔹 Guardar manualmente material desde el formulario
