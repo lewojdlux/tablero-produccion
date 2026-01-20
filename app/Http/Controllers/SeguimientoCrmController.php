@@ -39,6 +39,16 @@ class SeguimientoCrmController
                 'search' => $request->get('search') ?: null,
             ];
 
+            $user = Auth::user();
+
+            /**
+             * Seguridad real:
+             * si NO es perfil global, FORZAMOS el asesor al username
+             */
+            if (!in_array($user->perfil_usuario_id, [1, 2, 9])) {
+                $filters['asesor'] = $user->username;
+            }
+
             $result = $this->crmService->listCrm($page, $perPage, $filters);
 
             return response()->json([

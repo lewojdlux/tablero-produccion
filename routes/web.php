@@ -113,8 +113,18 @@ Route::middleware(['auth', 'perfil:1,2'])
         })->name('notificaciones.leer');
 
 
+        Route::get('/ordenes-trabajo/solicitudes', [SolicitudesController::class, 'solicitudes'])->name('solicitudes.index');
+        Route::get('/ordenes-trabajo/solicitudes/crear/{id}', [SolicitudesController::class, 'create'])->name('solicitudes.create');
+        Route::post('/ordenes-trabajo/solicitudes/{id}/registrar', [SolicitudesController::class, 'importExcel'])->name('solicitudes.store');
 
-        Route::middleware(['auth', 'perfil:1,2,5'])
+
+
+
+
+});
+
+
+Route::middleware(['auth', 'perfil:1,2,5'])
         ->prefix('crm')
         ->group(function () {
 
@@ -125,17 +135,6 @@ Route::middleware(['auth', 'perfil:1,2'])
             // Data AJAX CRM
             Route::get('/seguimiento/data', [SeguimientoCrmController::class, 'data'])
                 ->name('portal-crm.seguimiento.data');
-        });
-
-
-        Route::get('/ordenes-trabajo/solicitudes', [SolicitudesController::class, 'solicitudes'])->name('solicitudes.index');
-        Route::get('/ordenes-trabajo/solicitudes/crear/{id}', [SolicitudesController::class, 'create'])->name('solicitudes.create');
-        Route::post('/ordenes-trabajo/solicitudes/{id}/registrar', [SolicitudesController::class, 'importExcel'])->name('solicitudes.store');
-
-
-
-
-
 });
 
 
