@@ -34,15 +34,15 @@ class OrdenesTrabajoController
     public function index()
     {
         //
-
-        try {
-            $ordenesTrabajo = $this->orderWorkService->getOrdenesTrabajo();
+  $ordenesTrabajo = $this->orderWorkService->getOrdenesTrabajo();
             $instaladores = InstaladorModel::all();
 
             return view('workorders.index', [
                 'dataMatrial' => $ordenesTrabajo,
                 'instaladores' => $instaladores,
             ]);
+        try {
+
         } catch (\Exception $e) {
             // Manejo de errores
             return response()->view('errors.500', ['message' => $e->getMessage()], 500);

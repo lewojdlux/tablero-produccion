@@ -762,6 +762,14 @@ class ProductionRepository
 
     public function getOrdenesTrabajo()
     {
+
+        // 🔹 documentos ya asignados en MySQL
+        $documentosAsignados = \DB::connection('mysql')
+            ->table('work_orders')
+            ->pluck('n_documento')
+            ->toArray();
+
+
         return \DB::connection('sqlsrv')
             ->table('TblDocumentos as t')
             ->join('TblTerceros as tc', 't.StrTercero', '=', 'tc.StrIdTercero')
@@ -769,6 +777,14 @@ class ProductionRepository
             ->leftJoin('TblDetalleDocumentos as d', function ($join) {
                 $join->on('d.IntDocRefD', '=', 't.IntDocumento')->where('d.IntTransaccion', 104); // FACTURA
             })
+
+
+        // 🔴 EXCLUIR LOS YA ASIGNADOS (MySQL)
+        ->when(!empty($documentosAsignados), function ($q) use ($documentosAsignados) {
+            $q->whereNotIn('t.IntDocumento', $documentosAsignados);
+        })
+
+
             ->where('t.IntTransaccion', 109) // PEDIDO
             ->where('t.IntEstado', 0)
             ->select([
