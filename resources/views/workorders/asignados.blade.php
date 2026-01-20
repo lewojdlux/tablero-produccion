@@ -62,15 +62,6 @@
                     </div>
                 </div>
 
-                <a href="{{ route('workorders.create') }}"
-                    class="inline-flex items-center gap-2 bg-black text-dark text-xs font-medium
-            px-3 py-2 rounded-md shadow-sm hover:bg-zinc-800 transition-all">
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.8"
-                        stroke="currentColor" class="w-4 h-4">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-                    </svg>
-                    Agregar
-                </a>
 
             </div>
         </div>
