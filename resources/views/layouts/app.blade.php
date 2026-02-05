@@ -176,6 +176,21 @@
                {{ request()->routeIs('portal-crm.seguimiento.*') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
                 Seguimiento CRM
             </a>
+
+            @if ($isAdmin || $isAsesor)
+                <a href="{{ route('portal-crm.eventos.index') }}"
+                class="block rounded-lg
+                {{ request()->routeIs('portal-crm.eventos.*') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                    Visitas / Eventos
+                </a>
+            @endif
+
+            <a href="{{ route('portal-crm.seguimiento.kpis.view') }}"
+               class="block rounded-lg
+               {{ request()->routeIs('portal-crm.seguimiento.kpis.view') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                Dashboard CRM - KPIs
+            </a>
+
         @endif
     </nav>
 
@@ -240,6 +255,14 @@
         });
     })();
 </script>
+<!-- jQuery -->
+<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+
+<!-- Popper -->
+<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+
+<!-- Bootstrap 4 -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.min.js"></script>
 
 @stack('scripts')
 </body>

@@ -123,7 +123,7 @@ Route::middleware(['auth', 'perfil:1,2'])
 
 });
 
-
+// ===== Rutas CRM (perfiles 1,2,5) =====
 Route::middleware(['auth', 'perfil:1,2,5'])
         ->prefix('crm')
         ->group(function () {
@@ -135,6 +135,48 @@ Route::middleware(['auth', 'perfil:1,2,5'])
             // Data AJAX CRM
             Route::get('/seguimiento/data', [SeguimientoCrmController::class, 'data'])
                 ->name('portal-crm.seguimiento.data');
+
+
+            // Vista Eventos / Visitas CRM
+            Route::get('eventos', [SeguimientoCrmController::class, 'eventosIndex'])
+                ->name('portal-crm.eventos.index');
+
+            // Data AJAX Eventos / Visitas CRM
+            Route::get('eventos/data', [SeguimientoCrmController::class, 'eventosData'])
+                ->name('portal-crm.eventos.data');
+
+            // Listar Asesores con Eventos
+            Route::get('/crm/asesores-eventos', [SeguimientoCrmController::class, 'asesoresEventos'])
+            ->name('portal-crm.eventos.asesores');
+
+
+             // Listar Asesores con Oportunidades
+            Route::get('/crm/asesores-oportunidades', [SeguimientoCrmController::class, 'asesores'])
+            ->name('portal-crm.oportunidades.asesores');
+
+            // Listar Estados de Oportunidades por Asesor
+            Route::get('/crm/asesores-estados', [SeguimientoCrmController::class, 'estadoOportunidad'])
+            ->name('portal-crm.estados.asesores');
+
+
+            // Exportar Eventos / Visitas CRM
+            Route::get('/portal-crm/eventos/export',[SeguimientoCrmController::class, 'exportEventos'])->name('portal-crm.eventos.export');
+            // Exportar Oportunidades CRM
+            Route::get('/portal-crm/oportunidades/export',[SeguimientoCrmController::class, 'exportOportunidades'])->name('portal-crm.oportunidades.export');
+
+            // Vista detalle Fotos Evento / Visita
+            Route::get('eventos/{evento}/fotos', [SeguimientoCrmController::class, 'fotos'])->name('portal-crm.eventos.fotos');
+
+            // Ruta para servir imágenes CRM
+            Route::get('imagen', [SeguimientoCrmController::class, 'verImagen'])->name('crm.imagen');
+
+
+           // Vista KPIs
+            Route::get('/kpis', [SeguimientoCrmController::class, 'kpisView'])
+                ->name('portal-crm.seguimiento.kpis.view');
+
+            Route::get('/kpis/data', [SeguimientoCrmController::class, 'kpis'])
+                ->name('portal-crm.seguimiento.kpis.data');
 });
 
 
