@@ -118,6 +118,11 @@ Route::middleware(['auth', 'perfil:1,2'])
         Route::post('/ordenes-trabajo/solicitudes/{id}/registrar', [SolicitudesController::class, 'importExcel'])->name('solicitudes.store');
 
 
+        Route::get('/ordenes-trabajo/solicitudes/{pedidoMaterial}',[SolicitudesController::class, 'showSolicitud'])->name('solicitudes.show');
+        Route::get('/ordenes-trabajo/solicitudes/{pedidoMaterial}/aprobados',[SolicitudesController::class, 'showSolicitud'])->name('solicitudes.aprobados');
+
+
+
 
 
 
@@ -171,6 +176,10 @@ Route::middleware(['auth', 'perfil:1,2,5'])
             Route::get('imagen', [SeguimientoCrmController::class, 'verImagen'])->name('crm.imagen');
 
 
+            Route::post('/ordenes-trabajo/solicitudes/{pedidoMaterial}/approve',[SolicitudesController::class, 'approve'])->name('solicitudes.approve');
+
+
+
            // Vista KPIs
             Route::get('/kpis', [SeguimientoCrmController::class, 'kpisView'])
                 ->name('portal-crm.seguimiento.kpis.view');
@@ -211,7 +220,7 @@ Route::middleware(['auth', 'perfil:4,5'])
 Route::middleware(['auth', 'perfil:7'])
     ->group(function () {
 
-    Route::get('/ordenes/trabajo/asignados', [OrdenesTrabajoController::class, 'indexAsignados'])->name('ordenes.trabajo.asignados');
+    Route::get('/instalador/ordenes-trabajo', [OrdenesTrabajoController::class, 'indexAsignados'])->name('ordenes.trabajo.asignados');
     Route::post('/ordenes-trabajo/{workorder}/start', [OrdenesTrabajoController::class, 'start'])->name('workorders.start');
     Route::get('/ordenes-trabajo/{id}/materials',[OrdenesTrabajoController::class, 'indexMaterialesOrdenes'])->name('workorders.materials');
 
@@ -222,6 +231,8 @@ Route::middleware(['auth', 'perfil:7'])
     Route::post('/registrar/herramienta/{workorder}',[OrdenesTrabajoController::class, 'asignarMaterial'])->name('workorders.materials.asignar');
 
     Route::post('/pedidos-materiales/{pedido}/asignar', [OrdenesTrabajoController::class, 'solicitarMaterial'])->name('pedidos.materiales.asignar');
+
+
 
 
 });

@@ -131,18 +131,28 @@
                                     </button>
 
                                     <!-- VER SOLICITUD DE MATERIAL -->
-                                    <button v-if="workOrder.pedidos_materiales_count > 0" class="btn btn-primary btn-sm"
+                                    <button v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'pendiente'" class="btn btn-primary btn-sm"
                                         title="Ver solicitud de material"
                                         @click="irCargarSolicitud(workOrder.id_work_order)">
                                         <i class="fas fa-file-excel me-1"></i>
                                         Cargar solicitud (Excel)
                                     </button>
 
+                                    <!-- APROBADA → VER SOLICITUD -->
+                                    <button
+                                        v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'approved'"
+                                        class="btn btn-success btn-sm"
+                                        title="Ver solicitud aprobada"
+                                        @click="verSolicitud(workOrder.pedidos_materiales[0].id_pedido_material)">
+                                        <i class="fas fa-eye me-1"></i>
+                                        Ver solicitud
+                                    </button>
+
 
 
                                 @elseif ($isInstalador)
                                     <!-- ASIGNAR MATERIAL -->
-                                    <button v-if="workOrder.status === 'in_progress'"
+                                    <button v-if="workOrder.status === 'in_progress'  "
                                         class="btn btn-warning btn-sm text-dark" title="Asignar material"
                                         @click="irAsignarMaterial(workOrder.id_work_order)">
                                         <i class="fas fa-tools me-1"></i>
@@ -220,6 +230,7 @@
         const routeAsignarMaterial = "{{ route('workorders.materials', ':id') }}";
         const routePedidoShow = "{{ route('pedidos.materiales.show', ':id') }}";
         const routeSolicitudCreate = "{{ route('solicitudes.create', ':id') }}";
+        const routeSolicitudShow = "{{ route('solicitudes.aprobados', ':id') }}";
 
         window.AUTH_USER_ID = {{ auth()->id() }};
 
@@ -415,6 +426,16 @@
 
                         window.location.href =
                             routeSolicitudCreate.replace(':id', id);
+                    },
+
+                    verSolicitud(id) {
+                        if (!id) {
+                            alert('No existe pedido de material asociado');
+                            return;
+                        }
+
+                        window.location.href =
+                            routeSolicitudShow.replace(':id', id);
                     }
 
                 }

@@ -44,15 +44,16 @@ class OrderWorkRepository
 
         // ADMIN (1,2) → Ver todo SIN restricciones
         if (in_array($perfil, [1, 2], true)) {
-            return $this->orderWorkModel->with('instalador')->withCount('pedidosMateriales')
+            return $this->orderWorkModel->with('instalador', 'pedidosMateriales')
+            ->withCount('pedidosMateriales')
             ->orderBy('status', 'desc')->paginate(15);
         }
 
         // INSTALADOR → traer solo sus órdenes
-        if ($perfil == 7) {
-            $identificador = Auth::user()->identificador_instalador;
+        if (in_array($perfil, [7], true)) {
 
-            $instalador = InstaladorModel::where('identificador_usuario', $identificador)->first();
+            $identificador = Auth::user()->identificador_instalador;
+            $instalador = InstaladorModel::where('identificador_usuario',  $identificador)->first();
 
             // Si no tiene instalador, devolver vacío PERO SIN ROMPER LA VISTA
             if (!$instalador) {
@@ -61,7 +62,9 @@ class OrderWorkRepository
                     ->paginate(15);
             }
 
-            return $this->orderWorkModel->with('instalador')->where('instalador_id', $instalador->id_instalador)->orderBy('status', 'desc')->paginate(15);
+            return $this->orderWorkModel->with('instalador','pedidosMateriales',)
+            ->where('instalador_id', $instalador->id_instalador)
+            ->orderBy('status', 'desc')->paginate(15);
         }
 
         // Otros perfiles → ver todo

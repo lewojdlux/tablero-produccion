@@ -51,6 +51,19 @@
 
     </div>
 
+    @if(session('success'))
+        <div class="mb-4 text-sm text-green-700 bg-green-100 border border-green-300 rounded px-4 py-2">
+            {{ session('success') }}
+        </div>
+    @endif
+
+    @if(session('error'))
+        <div class="mb-4 text-sm text-red-700 bg-red-100 border border-red-300 rounded px-4 py-2">
+            {{ session('error') }}
+        </div>
+    @endif
+
+
     {{-- FORM --}}
     <form ref="form"
       action="{{ route('solicitudes.store', $ordenTrabajo->id_work_order) }}"

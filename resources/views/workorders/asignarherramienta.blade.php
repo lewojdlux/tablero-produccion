@@ -324,8 +324,8 @@
                         try {
                             const token = document.querySelector('meta[name="csrf-token"]')?.content;
                             const root = document.getElementById('asignar-herramienta-app');
-                            const addBase = root.dataset.addUrl.replace(/\/$/, '');
-                            const addUrl = `${addBase}/${this.orderId}`;
+
+                            const addUrl = root.dataset.addUrl;
 
                             const res = await fetch(addUrl, {
                                 method: 'POST',
@@ -511,8 +511,7 @@
 
                         const token = document.querySelector('meta[name="csrf-token"]').content;
                         const root = document.getElementById('asignar-herramienta-app');
-                        const addBase = root.dataset.addUrl.replace(/\/$/, '');
-                        const url = `${addBase}/${this.orderId}`;
+                        const url = root.dataset.addUrl;
 
                         for (const item of this.selectedItems) {
 

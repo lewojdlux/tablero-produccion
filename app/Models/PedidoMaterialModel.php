@@ -70,6 +70,21 @@ class PedidoMaterialModel extends Model
         );
     }
 
+    public function proveedor()
+    {
+        return $this->belongsTo(ProveedorModel::class, 'proveedor_id');
+    }
+
+    public function detalles()
+    {
+        return $this->hasMany(
+            DetalleSolicitudMaterialModel::class,
+            'solicitud_material_id',
+            'id_pedido_material'
+        );
+    }
+
+
 
 
 }
