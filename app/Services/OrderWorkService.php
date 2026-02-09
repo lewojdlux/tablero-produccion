@@ -6,7 +6,7 @@ namespace App\Services;
 use App\Repository\OrderWorkRepository;
 use App\Repository\ProductionRepository;
 
-
+use Carbon\Carbon;
 
 
 class OrderWorkService
@@ -63,5 +63,41 @@ class OrderWorkService
     {
         // Lógica para buscar materiales por nombre
         return $this->orderWorkRepository->getMaterialsByMaterialName($materialName);
+    }
+
+    // función para finalizar una orden de trabajo
+    public function finalizarOT(
+        int $id,
+        string $startedAt,
+        string $finishedAt,
+        string $notes,
+        int $userId
+    ): void {
+
+        $ot = $this->orderWorkRepository->findOrFail($id);
+
+        if ($ot->status !== 'in_progress') {
+            throw new \Exception('La orden de trabajo no está en ejecución');
+        }
+
+        $inicio = Carbon::parse($startedAt);
+        $fin    = Carbon::parse($finishedAt);
+
+        if ($fin->lessThanOrEqualTo($inicio)) {
+            throw new \Exception('La fecha final debe ser mayor a la inicial');
+        }
+
+        // ⏱ TIEMPO REAL
+        $totalMinutes = $inicio->diffInMinutes($fin);
+
+        $this->orderWorkRepository->updateById($id, [
+            'started_at'          => $inicio,
+            'finished_at'         => $fin,
+            'duration_minutes'    => $totalMinutes,
+            'installation_notes'  => $notes,
+            'usuario_finalizacion'=> $userId,
+            'fechafinalizacion'   => $fin,
+            'status'              => 'completed',
+        ]);
     }
 }

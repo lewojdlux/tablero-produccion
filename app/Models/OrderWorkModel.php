@@ -22,7 +22,13 @@ class OrderWorkModel extends Model
         'n_factura',
         'obsv_pedido',
         'status',
+        'started_at',
+        'finished_at',
+        'duration_minutes',
+        'installation_notes	',
         'description',
+        'fechafinalizacion',
+        'usuario_finalizacion'
     ];
 
     // campos permitidos para ordenar (reutilizable)
@@ -36,6 +42,11 @@ class OrderWorkModel extends Model
         'n_factura',
         'status',
         'id_work_order',
+    ];
+
+    protected $casts = [
+        'started_at' => 'datetime',
+        'finished_at' => 'datetime',
     ];
 
     /**
@@ -111,6 +122,11 @@ class OrderWorkModel extends Model
     {
         return $this->hasMany(PedidoMaterialModel::class, 'orden_trabajo_id', 'id_work_order');
     }
+
+    public function UsuariosOT(){
+        return $this->belongsTo(User::class, 'usuario_finalizacion', 'id');
+    }
+
 
 
 }

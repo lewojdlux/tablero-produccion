@@ -278,6 +278,8 @@ class OrdenesTrabajoController
         }
     }
 
+
+    // función para solicitar material (crear pedido de material)
     public function solicitarMaterial(Request $request)
     {
         try {
@@ -361,6 +363,8 @@ class OrdenesTrabajoController
         }
     }
 
+
+    // función para mostrar el detalle de un pedido de materiales por orden de trabajo
     public function verPedidoMaterial($orderId)
     {
         try {
@@ -375,6 +379,8 @@ class OrdenesTrabajoController
         }
     }
 
+
+    // función para mostrar el detalle de una orden de trabajo
     public function verOrden($orderId)
     {
         try {
@@ -394,6 +400,8 @@ class OrdenesTrabajoController
         }
     }
 
+
+    // función para obtener los materiales de una orden de trabajo en formato JSON (para Vue)
     public function getMaterialesJson($id)
     {
         try {
@@ -409,25 +417,82 @@ class OrdenesTrabajoController
         }
     }
 
-
+    // función para mostrar el detalle de un pedido de materiales
     public function show($pedidoId)
     {
 
+        $pedido = PedidoMaterialModel::with([
+            'ordenTrabajo.instalador',
+            'items',
+            'instalador'
+        ])->findOrFail($pedidoId);
 
+        return view('workorders.pedidosmateriales', [
+            'pedido' => $pedido,
+            'ordenTrabajo' => $pedido->ordenTrabajo,
+            'items' => $pedido->items,
+        ]);
+    }
 
+    // función para mostrar el formulario de finalización de orden de trabajo
+    public function finalizarForm($id)
+    {
+        $ordenTrabajo = OrderWorkModel::findOrFail($id);
+        return view('workorders.finalizar', [
+            'ordenTrabajo' => $ordenTrabajo,
+        ]);
+    }
 
-            $pedido = PedidoMaterialModel::with([
-                'ordenTrabajo.instalador',
-                'items',
-                'instalador'
-            ])->findOrFail($pedidoId);
+    // función para finalizar una orden de trabajo
+    public function finalizar(Request $request, int $workorder)
+    {
+        try {
 
-            return view('workorders.pedidosmateriales', [
-                'pedido' => $pedido,
-                'ordenTrabajo' => $pedido->ordenTrabajo,
-                'items' => $pedido->items,
+            $request->validate([
+                'started_at' => 'required|date',
+                'finished_at' => 'required|date|after:started_at',
+                'installation_notes' => 'required|string|min:10',
             ]);
 
+            $this->orderWorkService->finalizarOT(
+                $workorder,
+                $request->started_at,
+                $request->finished_at,
+                $request->installation_notes,
+                auth()->id()
+            );
 
+            return redirect()
+                ->route('ordenes.trabajo.asignados')
+                ->with('success', 'Orden de trabajo finalizada correctamente');
+
+        } catch (\Throwable $e) {
+
+            return back()
+                ->withInput()
+                ->with('error', $e->getMessage());
+        }
     }
+
+    // función para ver una orden de trabajo finalizada
+    public function verOrdenFinalizada($id)
+    {
+
+
+        try {
+            $ordenTrabajo = OrderWorkModel::with([
+                'instalador',
+                'pedidosMateriales.instalador',
+                'pedidosMateriales.items', 'UsuariosOT',
+                ])->findOrFail($id);
+
+            return view('workorders.finalizadashow', [
+                'ordenTrabajo' => $ordenTrabajo,
+            ]);
+        } catch (\Exception $e) {
+            // Manejo de errores
+            return response()->view('errors.500', ['message' => $e->getMessage()], 500);
+        }
+    }
+
 }

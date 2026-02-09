@@ -91,7 +91,7 @@ Route::middleware(['auth', 'perfil:1,2'])
         })->name('notificaciones.index');
 
 
-
+        // Ruta para marcar notificación como leída y redirigir
         Route::get('/notificaciones/{notification}', function ($notification) {
 
             $n = auth()->user()
@@ -112,17 +112,16 @@ Route::middleware(['auth', 'perfil:1,2'])
 
         })->name('notificaciones.leer');
 
-
+        // Rutas para solicitudes de materiales
         Route::get('/ordenes-trabajo/solicitudes', [SolicitudesController::class, 'solicitudes'])->name('solicitudes.index');
         Route::get('/ordenes-trabajo/solicitudes/crear/{id}', [SolicitudesController::class, 'create'])->name('solicitudes.create');
         Route::post('/ordenes-trabajo/solicitudes/{id}/registrar', [SolicitudesController::class, 'importExcel'])->name('solicitudes.store');
-
-
         Route::get('/ordenes-trabajo/solicitudes/{pedidoMaterial}',[SolicitudesController::class, 'showSolicitud'])->name('solicitudes.show');
         Route::get('/ordenes-trabajo/solicitudes/{pedidoMaterial}/aprobados',[SolicitudesController::class, 'showSolicitud'])->name('solicitudes.aprobados');
 
 
-
+        // Ver orden de trabajo finalizada
+        Route::get('/ordenes-trabajo/instalador/finalizada/{id}', [OrdenesTrabajoController::class, 'verOrdenFinalizada'])->name('workorders.finalizadas.show');
 
 
 
@@ -220,19 +219,24 @@ Route::middleware(['auth', 'perfil:4,5'])
 Route::middleware(['auth', 'perfil:7'])
     ->group(function () {
 
+
+    // Dashboard instalador
     Route::get('/instalador/ordenes-trabajo', [OrdenesTrabajoController::class, 'indexAsignados'])->name('ordenes.trabajo.asignados');
     Route::post('/ordenes-trabajo/{workorder}/start', [OrdenesTrabajoController::class, 'start'])->name('workorders.start');
     Route::get('/ordenes-trabajo/{id}/materials',[OrdenesTrabajoController::class, 'indexMaterialesOrdenes'])->name('workorders.materials');
 
 
-
+    // Rutas para solicitudes de materiales
     Route::get('buscar-material', [OrdenesTrabajoController::class, 'buscarMaterial'])->name('herramientas.search');
-
     Route::post('/registrar/herramienta/{workorder}',[OrdenesTrabajoController::class, 'asignarMaterial'])->name('workorders.materials.asignar');
-
     Route::post('/pedidos-materiales/{pedido}/asignar', [OrdenesTrabajoController::class, 'solicitarMaterial'])->name('pedidos.materiales.asignar');
 
+    // Finalizar orden de trabajo
+    Route::get('/ordenes-trabajo/{id}/finalizar', [OrdenesTrabajoController::class, 'finalizarForm'])->name('workorders.finalizar.form');
+    Route::post('/ordenes-trabajo/{id}/finalizar', [OrdenesTrabajoController::class, 'finalizar'])->name('workorders.finalizar');
 
+    // Ver orden de trabajo finalizada
+    Route::get('/ordenes-trabajo/finalizadas/{id}', [OrdenesTrabajoController::class, 'verOrdenFinalizada'])->name('workorders.finalizadas.show');
 
 
 });

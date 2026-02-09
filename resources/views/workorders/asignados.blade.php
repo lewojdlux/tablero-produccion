@@ -50,7 +50,7 @@
                             </div>
 
                             <a href="{{ route('notificaciones.index') }}"
-                            class="block text-center text-xs py-2 hover:bg-zinc-100">
+                                class="block text-center text-xs py-2 hover:bg-zinc-100">
                                 Ver todas las notificaciones
                             </a>
 
@@ -122,45 +122,66 @@
                         <td class="px-2 py-1 text-center">
                             <div class="d-flex justify-content-center flex-wrap gap-2">
 
+                                {{-- ================= ADMIN ================= --}}
                                 @if ($isAdmin)
-                                    <!-- VER OT -->
-                                    <button class="btn btn-outline-secondary btn-sm" title="Ver orden de trabajo"
+                                    {{-- OT FINALIZADA --}}
+                                    <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
+                                        title="Ver orden de trabajo finalizada"
+                                        @click="verOTFinalizada(workOrder.id_work_order)">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        OT Finalizada
+                                    </button>
+
+                                    {{-- OT EN PROCESO / PENDIENTE --}}
+                                    <button v-else class="btn btn-outline-secondary btn-sm" title="Ver orden de trabajo"
                                         @click="verOT(workOrder.id_work_order)">
                                         <i class="fas fa-eye me-1"></i>
                                         OT
                                     </button>
 
-                                    <!-- VER SOLICITUD DE MATERIAL -->
-                                    <button v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'pendiente'" class="btn btn-primary btn-sm"
-                                        title="Ver solicitud de material"
+                                    {{-- SOLICITUD MATERIAL --}}
+                                    <button
+                                        v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'pendiente'"
+                                        class="btn btn-primary btn-sm" title="Cargar solicitud de material"
                                         @click="irCargarSolicitud(workOrder.id_work_order)">
                                         <i class="fas fa-file-excel me-1"></i>
-                                        Cargar solicitud (Excel)
+                                        Cargar solicitud
                                     </button>
 
-                                    <!-- APROBADA → VER SOLICITUD -->
                                     <button
                                         v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'approved'"
-                                        class="btn btn-success btn-sm"
-                                        title="Ver solicitud aprobada"
+                                        class="btn btn-success btn-sm" title="Ver solicitud aprobada"
                                         @click="verSolicitud(workOrder.pedidos_materiales[0].id_pedido_material)">
                                         <i class="fas fa-eye me-1"></i>
                                         Ver solicitud
                                     </button>
 
-
-
+                                    {{-- ================= INSTALADOR ================= --}}
                                 @elseif ($isInstalador)
-                                    <!-- ASIGNAR MATERIAL -->
-                                    <button v-if="workOrder.status === 'in_progress'  "
+                                    {{-- EN EJECUCIÓN --}}
+                                    <button v-if="workOrder.status === 'in_progress'"
                                         class="btn btn-warning btn-sm text-dark" title="Asignar material"
                                         @click="irAsignarMaterial(workOrder.id_work_order)">
                                         <i class="fas fa-tools me-1"></i>
                                         Material
                                     </button>
 
-                                    <!-- INICIAR OT -->
-                                    <button v-else-if="workOrder.status === 'pending'" class="btn btn-danger btn-sm"
+                                    <button v-if="workOrder.status === 'in_progress'" class="btn btn-success btn-sm"
+                                        title="Finalizar orden de trabajo" @click="irFinalizarOT(workOrder.id_work_order)">
+                                        <i class="fas fa-check me-1"></i>
+                                        Finalizar OT
+                                    </button>
+
+                                    {{-- FINALIZADA --}}
+                                    <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
+                                        title="Ver orden de trabajo finalizada"
+                                        @click="verOTFinalizada(workOrder.id_work_order)">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        Ver OT
+                                    </button>
+
+                                    {{-- PENDIENTE --}}
+                                    <button v-if="workOrder.status === 'pending'" class="btn btn-danger btn-sm"
                                         title="Iniciar orden de trabajo" @click="iniciarOT(workOrder.id_work_order)">
                                         <i class="fas fa-play me-1"></i>
                                         Iniciar
@@ -195,8 +216,7 @@
                 <div class="p-3">
                     <div class="flex justify-between items-start">
                         <strong class="text-sm">@{{ t.title }}</strong>
-                        <button class="text-zinc-400 hover:text-zinc-700"
-                                @click="removeToast(t.id)">✕</button>
+                        <button class="text-zinc-400 hover:text-zinc-700" @click="removeToast(t.id)">✕</button>
                     </div>
 
                     <p class="text-xs text-zinc-700 mt-1">@{{ t.message }}</p>
@@ -231,10 +251,10 @@
         const routePedidoShow = "{{ route('pedidos.materiales.show', ':id') }}";
         const routeSolicitudCreate = "{{ route('solicitudes.create', ':id') }}";
         const routeSolicitudShow = "{{ route('solicitudes.aprobados', ':id') }}";
+        const routeFinalizarOT = "{{ route('workorders.finalizar.form', ':id') }}";
+        const routeVerOTFinalizada = "{{ route('workorders.finalizadas.show', ':id') }}";
 
         window.AUTH_USER_ID = {{ auth()->id() }};
-
-
     </script>
 
     <script>
@@ -265,26 +285,26 @@
                         if (window.Echo) {
                             clearInterval(esperarEcho);
 
-                          window.Echo
-                            .private(`App.Models.User.${window.AUTH_USER_ID}`)
-                            .notification((payload) => {
+                            window.Echo
+                                .private(`App.Models.User.${window.AUTH_USER_ID}`)
+                                .notification((payload) => {
 
-                                this.pushToast(payload);
+                                    this.pushToast(payload);
 
-                                this.notificaciones.unshift({
-                                    id: Date.now(),
-                                    data: payload,
-                                    created_at: new Date().toLocaleString()
+                                    this.notificaciones.unshift({
+                                        id: Date.now(),
+                                        data: payload,
+                                        created_at: new Date().toLocaleString()
+                                    });
+
+
+                                    // 👉 Notificación del navegador SOLO si no está activa la pestaña
+                                    if (document.visibilityState !== 'visible') {
+                                        this.showBrowserNotification(payload);
+                                    }
+
+
                                 });
-
-
-                                // 👉 Notificación del navegador SOLO si no está activa la pestaña
-                                if (document.visibilityState !== 'visible') {
-                                    this.showBrowserNotification(payload);
-                                }
-
-
-                            });
 
                         }
                     }, 300);
@@ -436,6 +456,14 @@
 
                         window.location.href =
                             routeSolicitudShow.replace(':id', id);
+                    },
+
+                    irFinalizarOT(id) {
+                        window.location.href = routeFinalizarOT.replace(':id', id);
+                    },
+
+                    verOTFinalizada(id) {
+                        window.location.href = routeVerOTFinalizada.replace(':id', id);
                     }
 
                 }

@@ -93,4 +93,16 @@ class OrderWorkRepository
         return MaterialModel::where('nombre_material', 'like', '%' . $materialName . '%')->orWhere('codigo_material', 'like', '%' . $materialName . '%')
         ->get();
     }
+
+
+    public function findOrFail(int $id): OrderWorkModel
+    {
+        return $this->orderWorkModel->findOrFail($id);
+    }
+
+    public function updateById(int $id, array $data): bool
+    {
+        return $this->orderWorkModel->where('id_work_order', $id)
+            ->update($data);
+    }
 }
