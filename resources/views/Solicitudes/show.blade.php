@@ -111,6 +111,43 @@
     </div>
 
 
+    {{-- REIMPORTAR / ADJUNTAR EXCEL --}}
+    @if($pedido->status === 'queued')
+        <div class="border rounded p-4 bg-zinc-50">
+
+            <h3 class="text-sm font-semibold mb-2">
+                📎 Adjuntar / Reimportar Excel
+            </h3>
+
+            <form action="{{ route('solicitudes.importExcel', $pedido->orden_trabajo_id) }}"
+                method="POST"
+                enctype="multipart/form-data"
+                class="flex items-center gap-3">
+
+                @csrf
+
+                <input type="file"
+                    name="archivo_excel"
+                    accept=".xls,.xlsx"
+                    required
+                    class="text-xs border rounded px-2 py-1">
+
+                <button class="px-4 py-2 text-xs bg-blue-600 text-dark border-dark border-1 rounded hover:bg-blue-700">
+                    Importar Excel
+                </button>
+            </form>
+
+            <p class="text-[11px] text-zinc-500 mt-2">
+                • Si el código ya existe, se actualizará.<br>
+                • Si el código es nuevo, se agregará.<br>
+                • No se eliminarán materiales existentes.
+            </p>
+
+        </div>
+    @endif
+
+
+
 
     {{-- BOTONES --}}
     <div class="flex justify-end gap-2">

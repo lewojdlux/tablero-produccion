@@ -109,6 +109,7 @@ Route::middleware(['auth', 'perfil:1,2,5'])
         Route::get('/ordenes-trabajo/solicitudes', [SolicitudesController::class, 'solicitudes'])->name('solicitudes.index');
         Route::get('/ordenes-trabajo/solicitudes/crear/{id}', [SolicitudesController::class, 'create'])->name('solicitudes.create');
         Route::post('/ordenes-trabajo/solicitudes/{id}/registrar', [SolicitudesController::class, 'importExcel'])->name('solicitudes.store');
+        Route::post('/ordenes-trabajo/solicitudes/{pedidoMaterial}/approve',[SolicitudesController::class, 'importExcel'])->name('solicitudes.importExcel');
         Route::get('/ordenes-trabajo/solicitudes/{pedidoMaterial}',[SolicitudesController::class, 'showSolicitud'])->name('solicitudes.show');
         Route::get('/ordenes-trabajo/solicitudes/{pedidoMaterial}/aprobados',[SolicitudesController::class, 'showSolicitud'])->name('solicitudes.aprobados');
 

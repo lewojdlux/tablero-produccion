@@ -137,7 +137,7 @@
                             <div class="d-flex justify-content-center flex-wrap gap-2">
 
                                 {{-- ================= ADMIN ================= --}}
-                                @if ($isAdmin || $isAsesor)
+                                @if ($isAdmin)
                                     <!-- OT FINALIZADA -->
                                     <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
                                         title="Ver orden de trabajo finalizada"
@@ -157,7 +157,7 @@
 
                                     <!-- SOLICITUD MATERIAL PENDIENTE -->
                                     <button
-                                        v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'pendiente'"
+                                        v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'queued'"
                                         class="btn btn-primary btn-sm" title="Cargar solicitud de material"
                                         @click="irCargarSolicitud(workOrder.id_work_order)">
                                         <i class="fas fa-file-excel me-1"></i>
@@ -172,6 +172,23 @@
                                         <i class="fas fa-eye me-1"></i>
                                         Ver solicitud
                                     </button>
+
+                                @elseif ($isAsesor)
+                                    {{-- ================= ASESOR ================= --}}
+                                    <!-- OT FINALIZADA -->
+                                    <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
+                                        title="Ver orden de trabajo finalizada"
+                                        @click="verOTFinalizada(workOrder.id_work_order)">
+                                        <i class="fas fa-check-circle me-1"></i>
+                                        OT Finalizada
+                                    </button>
+
+                                    <!-- OT EN PROGRESO -->
+                                    <span v-else-if="workOrder.status === 'in_progress'"
+                                        class="btn btn-success btn-sm disabled cursor-default">
+                                        <i class="fas fa-spinner me-1"></i>
+                                        OT Iniciada
+                                    </span>
 
                                     {{-- ================= INSTALADOR ================= --}}
                                 @elseif ($isInstalador)
