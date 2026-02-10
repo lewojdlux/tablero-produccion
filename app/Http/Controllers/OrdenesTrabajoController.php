@@ -543,6 +543,11 @@ class OrdenesTrabajoController
 
             $request->validate([
                 'installation_notes' => 'required|string|min:10',
+            ],
+            [
+                'installation_notes.required' => 'Las notas de instalación son obligatorias.',
+                'installation_notes.string' => 'Las notas de instalación deben ser un texto válido.',
+                'installation_notes.min' => 'Las notas de instalación deben tener al menos :min caracteres.',
             ]);
 
             $this->orderWorkService->finalizarOT(
