@@ -6,6 +6,7 @@ use App\Models\DetalleSolicitudMaterialModel;
 use App\Models\InstaladorModel;
 use App\Models\MaterialModel;
 use App\Models\OrderWorkModel;
+use App\Models\PedidoMaterialItemModel;
 use App\Models\PedidoMaterialModel;
 use App\Models\SolicitudMaterialModel;
 use App\Services\OrderWorkService;
@@ -155,9 +156,10 @@ class SolicitudesController
 
                 $cantidad = is_numeric($row['C']) ? (float) $row['C'] : 0;
                 $precio = is_numeric($row['D']) ? (float) $row['D'] : 0;
+                $totalExcel = is_numeric($row['E']) ? (float) $row['E'] : 0;
 
                 $subtotal = $cantidad * $precio;
-                $ivaCalculado = $subtotal * ($ivaGeneral / 100);
+                $ivaCalculado = $totalExcel - $subtotal;
                 $total = $subtotal + $ivaCalculado;
 
                 $materiales[] = [
@@ -166,10 +168,10 @@ class SolicitudesController
                     'descripcion_material' => $row['B'] ?? '',
                     'cantidad' => $cantidad,
                     'precio_unitario' => $precio,
-                    'iva' => $ivaCalculado,
-                    'iva_porcentaje' => $ivaGeneral,
+                    'iva' => round($ivaCalculado, 2),
+                    'iva_porcentaje' => null,
                     'descuento' => 0,
-                    'total' => $total,
+                    'total' => round($totalExcel, 2),
                 ];
             }
 
@@ -219,24 +221,43 @@ class SolicitudesController
     // 🔹 Aprobar solicitud
     public function approve($pedidoMaterialId)
     {
+
+
+        $pedidoItems = DetalleSolicitudMaterialModel::where('solicitud_material_id', $pedidoMaterialId)->count();
+
+
+        // 1  VALIDACIÓN CLAVE: debe tener materiales
+        if ($pedidoItems <= 0) {
+            return redirect()
+                ->route('solicitudes.show', $pedidoMaterialId)
+                ->with('error', 'No puede aprobar la solicitud porque no tiene materiales importados.');
+        }
+
+
+        $pedido = PedidoMaterialModel::where('id_pedido_material', $pedidoMaterialId)->firstOrFail();
+
+        // 2 Validación defensiva
+        if ($pedido->status !== 'queued') {
+            return redirect()
+                ->route('solicitudes.show', $pedidoMaterialId)
+                ->with('warning', 'La solicitud ya fue procesada anteriormente.');
+        }
+
+
         try {
+
             DB::beginTransaction();
 
-            $pedido = PedidoMaterialModel::where('id_pedido_material', $pedidoMaterialId)->firstOrFail();
 
-            // Validación defensiva
-            if ($pedido->status !== 'queued') {
-                return back()->with('warning', 'La solicitud ya fue procesada anteriormente.');
-            }
 
-            // 1️⃣ Cambiar estado del pedido
+            // 3 Cambiar estado del pedido
             $pedido->update([
                 'status' => 'approved',
                 'fecha_aprobacion' => now(),
                 'ref_id_usuario_modificacion' => auth()->id(),
             ]);
 
-            // 2️⃣ Registrar materiales en catálogo
+            // 4 Registrar materiales en catálogo
             foreach ($pedido->detalles as $detalle) {
                 $material = MaterialModel::firstOrCreate(
                     ['codigo_material' => $detalle->codigo_material],
@@ -246,7 +267,7 @@ class SolicitudesController
                     ],
                 );
 
-                // 3️⃣ Registrar materiales en orden de trabajo
+                // 5 Registrar materiales en orden de trabajo
                 $this->registrarMaterialEnOT(
                     $pedido->orden_trabajo_id,
                     $material->id_material,
@@ -287,6 +308,57 @@ class SolicitudesController
                 'material_id' => $materialId,
                 'cantidad' => $cantidad,
             ]);
+        }
+    }
+
+    // 🔹 Resetear solicitud (eliminar detalles y adjuntos, volver a estado inicial)
+    public function reset($pedidoMaterialId)
+    {
+        try {
+            DB::beginTransaction();
+
+            $pedido = PedidoMaterialModel::findOrFail($pedidoMaterialId);
+
+            if ($pedido->status !== 'queued') {
+                return back()->with('warning', 'No se puede resetear una solicitud aprobada.');
+            }
+
+            // 1️⃣ Eliminar detalles
+            DetalleSolicitudMaterialModel::where('solicitud_material_id', $pedidoMaterialId)->delete();
+
+            // 2️⃣ Eliminar adjuntos (BD + archivos)
+            $adjuntos = DB::table('solicitud_material_adjuntos')
+                ->where('solicitud_material_id', $pedidoMaterialId)
+                ->get();
+
+            foreach ($adjuntos as $adjunto) {
+                if (\Storage::disk('public')->exists($adjunto->archivo)) {
+                    \Storage::disk('public')->delete($adjunto->archivo);
+                }
+            }
+
+            DB::table('solicitud_material_adjuntos')
+                ->where('solicitud_material_id', $pedidoMaterialId)
+                ->delete();
+
+            // 3️⃣ Limpiar proveedor (opcional, recomendado)
+            $pedido->update([
+                'proveedor_id' => null,
+            ]);
+
+            DB::commit();
+
+            return back()->with('success', 'Solicitud limpiada correctamente. Puede adjuntar un nuevo Excel.');
+
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            \Log::error('Error al resetear solicitud', [
+                'pedido_id' => $pedidoMaterialId,
+                'error' => $e->getMessage(),
+            ]);
+
+            return back()->with('error', 'Error al borrar la solicitud. Intente nuevamente.');
         }
     }
 

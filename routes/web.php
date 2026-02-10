@@ -113,6 +113,8 @@ Route::middleware(['auth', 'perfil:1,2,5'])
         Route::get('/ordenes-trabajo/solicitudes/{pedidoMaterial}',[SolicitudesController::class, 'showSolicitud'])->name('solicitudes.show');
         Route::get('/ordenes-trabajo/solicitudes/{pedidoMaterial}/aprobados',[SolicitudesController::class, 'showSolicitud'])->name('solicitudes.aprobados');
 
+        Route::delete('/solicitudes/{pedidoMaterial}/reset',[SolicitudesController::class, 'reset'])->name('solicitudes.reset');
+
 
         // Ver orden de trabajo finalizada
         Route::get('/ordenes-trabajo/instalador/finalizada/{id}', [OrdenesTrabajoController::class, 'verOrdenFinalizada'])->name('workorders.finalizadas.show');
@@ -227,10 +229,16 @@ Route::middleware(['auth', 'perfil:7'])
 
     // Finalizar orden de trabajo
     Route::get('/ordenes-trabajo/{id}/finalizar', [OrdenesTrabajoController::class, 'finalizarForm'])->name('workorders.finalizar.form');
-    Route::post('/ordenes-trabajo/{id}/finalizar', [OrdenesTrabajoController::class, 'finalizar'])->name('workorders.finalizar');
+
+    // Ver orden de trabajo
+    Route::get('workorders/{id}/jornadas',[OrdenesTrabajoController::class, 'jornadas'])->name('workorders.jornadas');
+
+    Route::post('/ordenes-trabajo/{id}/jornada-laboral', [OrdenesTrabajoController::class, 'OTJornada'])->name('workorders.otjornada');
+
 
     // Ver orden de trabajo finalizada
     Route::get('/ordenes-trabajo/finalizadas/{id}', [OrdenesTrabajoController::class, 'verOrdenFinalizada'])->name('workorders.finalizadas.show');
+    Route::post('/ordenes-trabajo/{id}/finalizar', [OrdenesTrabajoController::class, 'finalizar'])->name('workorders.finalizar');
 
     // Ver pedido HGI de una orden de trabajo
     Route::get('/ordenes-trabajo/{id}/pedido-hgi',[OrdenesTrabajoController::class, 'verPedidoMaterialHgi'])->name('workorders.hgi.pedido');

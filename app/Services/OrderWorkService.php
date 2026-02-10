@@ -7,7 +7,7 @@ use App\Repository\OrderWorkRepository;
 use App\Repository\ProductionRepository;
 
 use Carbon\Carbon;
-
+use Illuminate\Support\Facades\DB;
 
 class OrderWorkService
 {
@@ -68,7 +68,6 @@ class OrderWorkService
     // función para finalizar una orden de trabajo
     public function finalizarOT(
         int $id,
-        string $startedAt,
         string $finishedAt,
         string $notes,
         int $userId
@@ -80,26 +79,50 @@ class OrderWorkService
             throw new \Exception('La orden de trabajo no está en ejecución');
         }
 
-        $inicio = Carbon::parse($startedAt);
         $fin    = Carbon::parse($finishedAt);
 
-        if ($fin->lessThanOrEqualTo($inicio)) {
-            throw new \Exception('La fecha final debe ser mayor a la inicial');
-        }
 
-        // ⏱ TIEMPO REAL
-        $totalMinutes = $inicio->diffInMinutes($fin);
 
         $this->orderWorkRepository->updateById($id, [
-            'started_at'          => $inicio,
             'finished_at'         => $fin,
-            'duration_minutes'    => $totalMinutes,
             'installation_notes'  => $notes,
             'usuario_finalizacion'=> $userId,
             'fechafinalizacion'   => $fin,
             'status'              => 'completed',
         ]);
     }
+
+    // función para marcar una orden de trabajo como en proceso
+    public function registrarJornadas(
+        int $ordenTrabajoId,
+        array $jornadas,
+        int $userId
+    ): void
+    {
+        DB::transaction(function () use ($ordenTrabajoId, $jornadas, $userId) {
+
+            foreach ($jornadas as $jornada) {
+
+                $inicio = Carbon::parse($jornada['fecha'].' '.$jornada['hora_inicio']);
+                $fin    = Carbon::parse($jornada['fecha'].' '.$jornada['hora_fin']);
+
+                if ($fin->lte($inicio)) {
+                    throw new \Exception('La hora final debe ser mayor a la hora inicial.');
+                }
+
+                $this->orderWorkRepository->crearJornada([
+                    'orden_trabajo_id' => $ordenTrabajoId,
+                    'fecha' => $jornada['fecha'],
+                    'hora_inicio' => $jornada['hora_inicio'],
+                    'hora_fin' => $jornada['hora_fin'],
+                    'horas_trabajadas' => round($inicio->diffInMinutes($fin) / 60, 2),
+                    'observaciones' => $jornada['observaciones'] ?? null,
+                    'user_otj' => $userId,
+                ]);
+            }
+        });
+    }
+
 
     // función para obtener el material de una orden de trabajo por ID
     public function getPedidoHgiPorOT(int $workOrderId)

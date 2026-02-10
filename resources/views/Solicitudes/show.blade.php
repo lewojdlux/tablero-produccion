@@ -153,6 +153,20 @@
     <div class="flex justify-end gap-2">
 
          @if($pedido->status === 'queued' && in_array(auth()->user()->perfil_usuario_id, [1,2]))
+
+            <form method="POST"
+                action="{{ route('solicitudes.reset', $pedido->id_pedido_material) }}"
+                onsubmit="return confirm('⚠️ Esto eliminará TODOS los materiales y archivos adjuntos. ¿Desea continuar?')">
+
+                @csrf
+                @method('DELETE')
+
+                <button class="px-4 py-2 text-xs bg-red-600 text-white rounded hover:bg-red-700">
+                    🗑️ Borrar todo y volver a adjuntar Excel
+                </button>
+            </form>
+
+
             <form method="POST" action="{{ route('solicitudes.approve', $pedido->id_pedido_material) }}">
                 @csrf
                 <button

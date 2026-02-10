@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Events\MaterialSolicitadoEvent;
 use App\Models\InstaladorModel;
+use App\Models\OrdenTrabajoModel;
 use App\Models\OrderWorkModel;
 use App\Models\PedidoMaterialItemModel;
 use App\Models\PedidoMaterialModel;
@@ -19,6 +20,8 @@ use App\Notifications\MaterialSolicitadoNotification;
 use App\Notifications\NewPedidoMaterial;
 use Illuminate\Support\Facades\Notification;
 
+use Carbon\Carbon;
+
 class OrdenesTrabajoController
 {
     protected OrderWorkService $orderWorkService;
@@ -31,27 +34,25 @@ class OrdenesTrabajoController
     /**
      * Display a listing of the resource.
      */
-    public function index( Request $request)
+    public function index(Request $request)
     {
         //
 
-            $user = Auth::user();
+        $user = Auth::user();
 
-            $vendedor = null;
-            if ((int) $user->perfil_usuario_id === 5) {
-                $vendedor = $user->identificador_asesor;
-            }
+        $vendedor = null;
+        if ((int) $user->perfil_usuario_id === 5) {
+            $vendedor = $user->identificador_asesor;
+        }
 
+        $ordenesTrabajo = $this->orderWorkService->getOrdenesTrabajo($request->search, $vendedor);
+        $instaladores = InstaladorModel::all();
 
-            $ordenesTrabajo = $this->orderWorkService->getOrdenesTrabajo($request->search,  $vendedor);
-            $instaladores = InstaladorModel::all();
-
-            return view('workorders.index', [
-                'dataMatrial' => $ordenesTrabajo,
-                'instaladores' => $instaladores,
-            ]);
+        return view('workorders.index', [
+            'dataMatrial' => $ordenesTrabajo,
+            'instaladores' => $instaladores,
+        ]);
         try {
-
         } catch (\Exception $e) {
             // Manejo de errores
             return response()->view('errors.500', ['message' => $e->getMessage()], 500);
@@ -133,7 +134,6 @@ class OrdenesTrabajoController
     {
         //
         try {
-
             $usuario = Auth::user();
 
             $vendedor = null;
@@ -141,11 +141,7 @@ class OrdenesTrabajoController
                 $vendedor = $usuario->id;
             }
 
-
-
             $ordenesTrabajo = $this->orderWorkService->getOrderAsignados($vendedor);
-
-
 
             $notificaciones = in_array($usuario->perfil_usuario_id, [1, 2]) ? $usuario->unreadNotifications()->orderBy('created_at', 'desc')->get() : collect(); // vacío para instaladores
 
@@ -164,9 +160,8 @@ class OrdenesTrabajoController
     {
         $user = Auth::user();
 
-
         // 🔒 Seguridad: solo instalador
-        if ((int)$user->perfil_usuario_id !== 7) {
+        if ((int) $user->perfil_usuario_id !== 7) {
             abort(403);
         }
 
@@ -313,7 +308,6 @@ class OrdenesTrabajoController
         }
     }
 
-
     // función para solicitar material (crear pedido de material)
     public function solicitarMaterial(Request $request)
     {
@@ -373,14 +367,17 @@ class OrdenesTrabajoController
 
             $usuariosDestino = User::whereIn('perfil_usuario_id', [1, 2])->get();
             foreach ($usuariosDestino as $user) {
-                Notification::send($user, new NewPedidoMaterial([
-                    'pedido_id' => $pedido->id_pedido_material,
-                    'material' => [
-                        'codigo' => $item->codigo_material,
-                        'descripcion' => $item->descripcion_material,
-                        'cantidad' => $item->cantidad,
-                    ],
-                ]));
+                Notification::send(
+                    $user,
+                    new NewPedidoMaterial([
+                        'pedido_id' => $pedido->id_pedido_material,
+                        'material' => [
+                            'codigo' => $item->codigo_material,
+                            'descripcion' => $item->descripcion_material,
+                            'cantidad' => $item->cantidad,
+                        ],
+                    ]),
+                );
             }
 
             return response()->json([
@@ -398,7 +395,6 @@ class OrdenesTrabajoController
         }
     }
 
-
     // función para mostrar el detalle de un pedido de materiales por orden de trabajo
     public function verPedidoMaterial($orderId)
     {
@@ -413,7 +409,6 @@ class OrdenesTrabajoController
             return response()->view('errors.500', ['message' => $e->getMessage()], 500);
         }
     }
-
 
     // función para mostrar el detalle de una orden de trabajo
     public function verOrden($orderId)
@@ -435,7 +430,6 @@ class OrdenesTrabajoController
         }
     }
 
-
     // función para obtener los materiales de una orden de trabajo en formato JSON (para Vue)
     public function getMaterialesJson($id)
     {
@@ -455,12 +449,7 @@ class OrdenesTrabajoController
     // función para mostrar el detalle de un pedido de materiales
     public function show($pedidoId)
     {
-
-        $pedido = PedidoMaterialModel::with([
-            'ordenTrabajo.instalador',
-            'items',
-            'instalador'
-        ])->findOrFail($pedidoId);
+        $pedido = PedidoMaterialModel::with(['ordenTrabajo.instalador', 'items', 'instalador'])->findOrFail($pedidoId);
 
         return view('workorders.pedidosmateriales', [
             'pedido' => $pedido,
@@ -472,25 +461,69 @@ class OrdenesTrabajoController
     // función para mostrar el formulario de finalización de orden de trabajo
     public function finalizarForm($id)
     {
-        try{
-
+        try {
             $count = WorkOrdersMaterialsModel::where('work_order_id', $id)->count();
 
-            if($count === 0){
-                return redirect()
-                    ->route('ordenes.trabajo.asignados')
-                    ->with('error', 'No se puede finalizar la orden de trabajo porque no tiene materiales asignados.');
+            if ($count === 0) {
+                return redirect()->route('ordenes.trabajo.asignados')->with('error', 'No se puede finalizar la orden de trabajo porque no tiene materiales asignados.');
             }
 
             $ordenTrabajo = OrderWorkModel::findOrFail($id);
             return view('workorders.finalizar', [
                 'ordenTrabajo' => $ordenTrabajo,
             ]);
-
-
-        }catch (\Exception $e) {
+        } catch (\Exception $e) {
             // Manejo de errores
             return response()->view('errors.500', ['message' => $e->getMessage()], 500);
+        }
+    }
+
+    // función para obtener las jornadas de una orden de trabajo
+    public function jornadas($id)
+    {
+        return DB::table('orden_trabajo_jornadas')
+            ->where('orden_trabajo_id', $id)
+            ->orderBy('fecha')
+            ->get(['fecha', 'hora_inicio', 'hora_fin', 'horas_trabajadas', 'observaciones']);
+    }
+
+    // función para registrar jornadas de una orden de trabajo
+    public function OTJornada(Request $request, int $workorder)
+    {
+
+        try {
+                // 1️⃣ Validación
+                $request->validate([
+                    'jornadas' => 'required|array|min:1',
+                    'jornadas.*.fecha' => 'required|date',
+                    'jornadas.*.hora_inicio' => 'required',
+                    'jornadas.*.hora_fin' => 'required',
+                    'jornadas.*.observaciones' => 'nullable|string',
+                    //'installation_notes' => 'required|string|min:10',
+                ]);
+
+                // 2️⃣ Finalizar OT (estado general)
+                $this->orderWorkService->registrarJornadas($workorder, $request->jornadas, Auth::user()->id);
+
+                return response()->json([
+                    'type' => 'success',
+                    'message' => 'Jornadas registradas correctamente.'
+                ], 200);
+
+
+        } catch (\Illuminate\Validation\ValidationException $e) {
+
+            return response()->json([
+                'type' => 'warning',
+                'message' => collect($e->errors())->first()[0]
+            ], 422);
+
+        } catch (\Throwable $e) {
+
+            return response()->json([
+                'type' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 
@@ -499,43 +532,44 @@ class OrdenesTrabajoController
     {
         try {
 
+            $count = OrdenTrabajoModel::where('orden_trabajo_id', $workorder)->count();
+
+            if ($count === 0) {
+                return response()->json([
+                    'type' => 'error',
+                    'message' => 'No se puede finalizar la orden de trabajo porque no tiene jornadas registradas.'
+                ], 422);
+            }
+
             $request->validate([
-                'started_at' => 'required|date',
-                'finished_at' => 'required|date|after:started_at',
                 'installation_notes' => 'required|string|min:10',
             ]);
 
             $this->orderWorkService->finalizarOT(
                 $workorder,
-                $request->started_at,
-                $request->finished_at,
+                now()->toDateTimeString(),
                 $request->installation_notes,
                 auth()->id()
             );
 
-            return redirect()
-                ->route('ordenes.trabajo.asignados')
-                ->with('success', 'Orden de trabajo finalizada correctamente');
+            return response()->json([
+                'type' => 'success',
+                'message' => 'Orden de trabajo finalizada correctamente.'
+            ]);
 
         } catch (\Throwable $e) {
-
-            return back()
-                ->withInput()
-                ->with('error', $e->getMessage());
+            return response()->json([
+                'type' => 'error',
+                'message' => $e->getMessage()
+            ], 500);
         }
     }
 
     // función para ver una orden de trabajo finalizada
     public function verOrdenFinalizada($id)
     {
-
-
         try {
-            $ordenTrabajo = OrderWorkModel::with([
-                'instalador',
-                'pedidosMateriales.instalador',
-                'pedidosMateriales.items', 'UsuariosOT',
-                ])->findOrFail($id);
+            $ordenTrabajo = OrderWorkModel::with(['instalador', 'pedidosMateriales.instalador', 'pedidosMateriales.items', 'UsuariosOT'])->findOrFail($id);
 
             return view('workorders.finalizadashow', [
                 'ordenTrabajo' => $ordenTrabajo,
@@ -545,5 +579,4 @@ class OrdenesTrabajoController
             return response()->view('errors.500', ['message' => $e->getMessage()], 500);
         }
     }
-
 }

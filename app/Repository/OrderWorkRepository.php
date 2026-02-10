@@ -2,7 +2,7 @@
 
 namespace App\Repository;
 
-
+use App\Models\OrdenTrabajoModel;
 use App\Models\MaterialModel;
 use App\Models\InstaladorModel;
 use App\Models\OrderWorkModel;
@@ -18,11 +18,13 @@ class OrderWorkRepository
 {
     protected OrderWorkModel $orderWorkModel;
     protected WorkOrdersMaterialsModel $workOrdersMaterialsModel;
+    protected OrdenTrabajoModel $ordenTrabajoModel;
 
-    public function __construct(OrderWorkModel $orderWorkModel, WorkOrdersMaterialsModel $workOrdersMaterialsModel)
+    public function __construct(OrderWorkModel $orderWorkModel, WorkOrdersMaterialsModel $workOrdersMaterialsModel, OrdenTrabajoModel $ordenTrabajoModel)
     {
         $this->orderWorkModel = $orderWorkModel;
         $this->workOrdersMaterialsModel = $workOrdersMaterialsModel;
+        $this->ordenTrabajoModel = $ordenTrabajoModel;
     }
 
     // Métodos para manejar la lógica de negocio relacionada con órdenes de trabajo
@@ -148,5 +150,20 @@ class OrderWorkRepository
     {
         return $this->orderWorkModel->where('id_work_order', $id)
             ->update($data);
+    }
+
+    public function crearJornada(array $data){
+        return $this->ordenTrabajoModel->updateOrCreate(  [
+            'orden_trabajo_id' => $data['orden_trabajo_id'],
+            'fecha' => $data['fecha'],
+            'hora_inicio' => $data['hora_inicio'],
+            'hora_fin' => $data['hora_fin'],
+        ],
+        [
+            'horas_trabajadas' => $data['horas_trabajadas'],
+            'observaciones' => $data['observaciones'],
+            'fechareg_otj' => now(),
+            'user_otj' => $data['user_otj'],
+        ]);
     }
 }
