@@ -422,6 +422,19 @@ class Index extends Component
         $this->password_confirmation = '';
     }
 
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage();
+    }
+
+
+    public function updatedPerPage(): void
+    {
+        $this->resetPage();
+    }
+
+
     /* ==== Eventos disparados desde JS con Livewire.dispatch(...) ==== */
 
     #[On('ui:open-create')]

@@ -14,9 +14,16 @@ class EnsurePerfil
      */
     public function handle(Request $request, Closure $next, ...$perfiles): Response
     {
+        // Permite acceso a rutas Livewire sin validar perfil (solo auth)
+        if ($request->is('livewire/*')) {
+            return $next($request);
+        }
+
+
+
         $user = $request->user();
         if (!$user) {
-            return redirect()->route('login');
+            abort(401);
         }
 
         $permitidos = array_map('intval', $perfiles);

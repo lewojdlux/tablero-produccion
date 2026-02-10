@@ -28,7 +28,8 @@ class OrderWorkModel extends Model
         'installation_notes	',
         'description',
         'fechafinalizacion',
-        'usuario_finalizacion'
+        'usuario_finalizacion',
+        'usereg_ot'
     ];
 
     // campos permitidos para ordenar (reutilizable)
@@ -47,6 +48,7 @@ class OrderWorkModel extends Model
     protected $casts = [
         'started_at' => 'datetime',
         'finished_at' => 'datetime',
+        'fechareg_ot' => 'datetime',
     ];
 
     /**

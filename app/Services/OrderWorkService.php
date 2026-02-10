@@ -28,10 +28,10 @@ class OrderWorkService
         return $this->orderWorkRepository->getAllOrders();
     }
 
-    public function getOrdenesTrabajo()
+    public function getOrdenesTrabajo(  $search = null, $vendorId = null)
     {
         // Lógica para crear una nueva orden de trabajo
-        return $this->productionRepository->getOrdenesTrabajo();
+        return $this->productionRepository->getOrdenesTrabajo($search, $vendorId);
     }
 
     public function getOrderDetail($ndoc)
@@ -47,10 +47,10 @@ class OrderWorkService
     }
 
     /* función para obtener las órdenes de trabajo asignadas */
-    public function getOrderAsignados()
+    public function getOrderAsignados($vendorId = null)
     {
         // Lógica para obtener las órdenes de trabajo asignadas
-        return $this->orderWorkRepository->getOrderAsignados();
+        return $this->orderWorkRepository->getOrderAsignados($vendorId);
     }
 
     public function getMaterialsByOrderId($orderId)
@@ -99,5 +99,11 @@ class OrderWorkService
             'fechafinalizacion'   => $fin,
             'status'              => 'completed',
         ]);
+    }
+
+    // función para obtener el material de una orden de trabajo por ID
+    public function getPedidoHgiPorOT(int $workOrderId)
+    {
+        return $this->orderWorkRepository->getPedidoHgiPorOT($workOrderId);
     }
 }

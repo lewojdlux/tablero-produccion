@@ -38,8 +38,9 @@ class OrderWorkRepository
     }
 
     /*  funcion para obtener las órdenes de trabajo asignadas  */
-    public function getOrderAsignados()
+    public function getOrderAsignados($vendorId = null)
     {
+
         $perfil = Auth::user()->perfil_usuario_id;
 
         // ADMIN (1,2) → Ver todo SIN restricciones
@@ -67,8 +68,51 @@ class OrderWorkRepository
             ->orderBy('status', 'desc')->paginate(15);
         }
 
+
+        // =========================
+        // ASESOR → SUS OT (userreg_ot)
+        // =========================
+        if ($perfil === 5) {
+
+            if (empty($vendorId)) {
+                return $this->orderWorkModel
+                    ->whereRaw('1 = 0')
+                    ->paginate(15);
+            }
+
+            return $this->orderWorkModel
+                ->with('instalador', 'pedidosMateriales')
+                ->withCount('pedidosMateriales')
+                ->where('usereg_ot', $vendorId)
+                ->orderBy('status', 'desc')
+                ->paginate(15);
+        }
+
+
+
+
         // Otros perfiles → ver todo
         return $this->orderWorkModel->with('instalador')->orderBy('status', 'desc')->paginate(15);
+    }
+
+    // función para obtener el material de una orden de trabajo por ID
+    public function getPedidoHgiPorOT(int $workOrderId)
+    {
+       return DB::connection('sqlsrv')
+            ->table('TblDocumentos as t')
+            ->join('TblTerceros as tc', 't.StrTercero', '=', 'tc.StrIdTercero')
+            ->join('TblDetalleDocumentos as d', 'd.IntDocumento', '=', 't.IntDocumento')
+            ->join('TblProductos as p', 'p.StrIdProducto', '=', 'd.StrProducto')
+            ->where('t.IntDocumento', $workOrderId)
+            ->where('d.IntTransaccion', 109) // PEDIDO
+            ->select([
+                't.IntDocumento as pedido',
+                'tc.StrNombre as cliente',
+                'p.StrIdProducto      as codigo_producto',
+                'p.StrDescripcion as producto',
+                'd.IntCantidad as cantidad',
+            ])
+            ->get();
     }
 
 

@@ -40,7 +40,7 @@ Route::post('/logout', function (Request $request) {
  * ADMIN / SUPER (perfiles 1,2)
  * Prefijo y alias: admin.*
  */
-Route::middleware(['auth', 'perfil:1,2'])
+Route::middleware(['auth', 'perfil:1,2,5'])
     ->group(function () {
 
 
@@ -49,38 +49,31 @@ Route::middleware(['auth', 'perfil:1,2'])
             ->name('dashboard');
 
 
-        // Órdenes pendientes (admin/super)
-        Route::get('/orders/pending', \App\Livewire\Order\PendingList::class)
-            ->name('orders.pending.list');
-
-
         // Gestión de usuarios (admin/super)
-        Route::get('/users', \App\Livewire\User\Index::class)
-            ->name('users.index');
+        Route::get('/users', \App\Livewire\User\Index::class)->name('users.index');
 
         // Settings (perfil admin/super; muévelas si deben ser globales)
-        Route::get('/settings/profile', \App\Livewire\User\Profile::class)
-            ->name('settings.profile');
+        Route::get('/settings/profile', \App\Livewire\User\Profile::class)->name('settings.profile');
 
-        Route::get('/settings/password', \App\Livewire\User\Password::class)
-            ->name('settings.password');
+        Route::get('/settings/password', \App\Livewire\User\Password::class)->name('settings.password');
 
 
+        // Órdenes pendientes (admin/super)
+        Route::get('/orders/pending', \App\Livewire\Order\PendingList::class)->name('orders.pending.list');
+
+
+
+
+        // Rutas para órdenes de trabajo y pedidos de materiales
         Route::get('/ordenes-trabajo/asignar', [OrdenesTrabajoController::class, 'index'])->name('ordenes.trabajo.asignar');
         Route::post('/ordenes-trabajo/asignar', [OrdenesTrabajoController::class, 'store'])->name('ordenes.trabajo.store');
         Route::get('/pedidos-materiales/{pedido}', [OrdenesTrabajoController::class, 'show'])->name('pedidos.materiales.show');
         Route::get('/ordenes-trabajo/crear', [OrdenesTrabajoController::class, 'create'])->name('workorders.create');
-
-
         Route::get('/ordenes-trabajo/asignados', [OrdenesTrabajoController::class, 'indexAsignados'])->name('ordenes.trabajo.asignadas');
-
-
-
-
         Route::get('/pedidos-materiales/orden-trabajo/{orderId}', [OrdenesTrabajoController::class, 'verPedidoMaterial'])->name('pedidos.materiales.byOrden');
-
         Route::get('/ordenes-trabajo/{workorder}', [OrdenesTrabajoController::class, 'verOrden'])->name('workorders.show');
 
+        // Rutas para notificaciones
         Route::get('/notificaciones', function () {
             $notificaciones = auth()->user()
                 ->notifications()
@@ -238,20 +231,8 @@ Route::middleware(['auth', 'perfil:7'])
     // Ver orden de trabajo finalizada
     Route::get('/ordenes-trabajo/finalizadas/{id}', [OrdenesTrabajoController::class, 'verOrdenFinalizada'])->name('workorders.finalizadas.show');
 
+    // Ver pedido HGI de una orden de trabajo
+    Route::get('/ordenes-trabajo/{id}/pedido-hgi',[OrdenesTrabajoController::class, 'verPedidoMaterialHgi'])->name('workorders.hgi.pedido');
+
 
 });
-
-
-
-
-
-
-
-
-
-Route::post('/logout', function (Request $request) {
-    Auth::guard('web')->logout();
-    $request->session()->invalidate();
-    $request->session()->regenerateToken();
-    return to_route('login');
-})->middleware(['web','auth'])->name('logout');

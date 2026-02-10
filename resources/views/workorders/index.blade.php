@@ -1,7 +1,12 @@
 @extends('layouts.app')
 
 @section('content')
-    <div id="app" class="space-y-4">
+    <style>
+        [v-cloak] {
+            display: none;
+        }
+    </style>
+    <div id="app" v-cloak class="space-y-4">
 
         {{-- Header --}}
         <div class="flex items-center justify-between">
@@ -49,28 +54,35 @@
                 </thead>
 
                 <tbody class="[&>tr:nth-child(odd)]:bg-white [&>tr:nth-child(even)]:bg-zinc-50">
-                    @forelse($dataMatrial as $workOrder)
-                        <tr class="border-b border-zinc-200 hover:bg-zinc-50"
-                            :style="shouldHide('{{ $workOrder->n_documento }}', '{{ $workOrder->vendedor }}',
-                                '{{ $workOrder->tercero }}')">
+                    <tr v-for="(workOrder, index) in filteredOrders"
+                        :key="workOrder.n_documento"
+                        class="border-b border-zinc-200 hover:bg-zinc-50">
 
-                            <td class="px-2 py-1 whitespace-nowrap">{{ $workOrder->n_documento }}</td>
-                            <td class="px-2 py-1 whitespace-nowrap">{{ $workOrder->tercero }}</td>
-                            <td class="px-2 py-1 whitespace-nowrap">{{ $workOrder->vendedor }}</td>
+                        <td class="px-2 py-1 whitespace-nowrap">
+                            @{{ workOrder.n_documento }}
+                        </td>
 
-                            <td class="px-2 py-1 text-center">
-                                <button @click="openModal({{ $loop->index }})"
-                                    class="px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700">
-                                    Asignar
-                                </button>
-                            </td>
+                        <td class="px-2 py-1 whitespace-nowrap">
+                            @{{ workOrder.tercero }}
+                        </td>
 
-                        </tr>
-                    @empty
-                        <tr>
-                            <td colspan="7" class="px-2 py-6 text-center text-zinc-500">Sin resultados…</td>
-                        </tr>
-                    @endforelse
+                        <td class="px-2 py-1 whitespace-nowrap">
+                            @{{ workOrder.vendedor }}
+                        </td>
+
+                        <td class="px-2 py-1 text-center">
+                            <button @click="openModal(index)"
+                                class="px-3 py-1 bg-indigo-600 text-white rounded text-xs hover:bg-indigo-700">
+                                Asignar
+                            </button>
+                        </td>
+                    </tr>
+
+                    <tr v-if="filteredOrders.length === 0">
+                        <td colspan="7" class="px-2 py-6 text-center text-zinc-500">
+                            Sin resultados…
+                        </td>
+                    </tr>
                 </tbody>
             </table>
         </div>
@@ -150,8 +162,8 @@
             createApp({
                 data() {
                     return {
+                        orders: window.WORKORDERS,
                         mostrarForm: false,
-
                         modal: false,
                         search: "",
                         form: {
@@ -170,19 +182,27 @@
                         }
                     };
                 },
+                computed: {
+                    filteredOrders() {
+                        if (!this.search) {
+                            return this.orders;
+                        }
+
+                        const term = this.search.toLowerCase();
+                        return this.orders.filter(order =>
+                            order.n_documento.toLowerCase().includes(term) ||
+                            order.tercero.toLowerCase().includes(term) ||
+                            order.vendedor.toLowerCase().includes(term)
+                        );
+                    }
+                },
 
                 methods: {
-                    // Mostrar/ocultar fila según búsqueda
-                    shouldHide(doc, vendedor, cliente) {
-                        const s = this.search.toLowerCase();
-                        if (!s) return "";
-                        const t = `${doc} ${vendedor} ${cliente}`.toLowerCase();
-                        return t.includes(s) ? "" : "display:none;";
-                    },
+
 
                     // Abre modal con la info del documento
                     openModal(index) {
-                        const workOrder = window.WORKORDERS[index];
+                        const workOrder = this.filteredOrders[index];
 
                         this.form = {
                             n_documento: workOrder.n_documento,

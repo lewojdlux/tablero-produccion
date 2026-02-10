@@ -71,6 +71,7 @@
     $isAsesor = $perfil === 5;
     $isInstalador = $perfil === 7;
     $isAdminInstalador =  $perfil === 6;
+
 @endphp
 
 {{-- SIDEBAR --}}
@@ -98,7 +99,7 @@
         </a>
 
 
-        @if ($isAdmin || $isInstalador || $isAdminInstalador)
+        @if ($isAdmin || $isInstalador || $isAdminInstalador || $isAsesor)
 
             {{-- Órdenes de trabajo --}}
             @php $otActive = request()->routeIs('ordenes.trabajo.*'); @endphp
@@ -130,7 +131,7 @@
         @endif
 
 
-        @if ($isAdmin  || $isAdminInstalador)
+        @if ($isAdmin  || $isAdminInstalador )
 
             {{-- Órdenes de trabajo --}}
             @php $otActive = request()->routeIs('pedidos.materiales.*'); @endphp

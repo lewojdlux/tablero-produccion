@@ -94,6 +94,20 @@
             $isAsesor = $perfil === 5;
         @endphp
 
+        @if (session('success'))
+            <div class="alert alert-success border border-success alert-dismissible fade show">
+                {{ session('success') }}
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            </div>
+        @endif
+
+        @if (session('error'))
+            <div class="alert alert-danger border border-danger alert-dismissible fade show">
+                {{ session('error') }}
+                <button type="button" class="close" data-dismiss="alert">&times;</button>
+            </div>
+        @endif
+
         {{-- Tabla --}}
         <div class="overflow-x-auto rounded-lg border border-zinc-200">
             <table class="w-full text-xs leading-tight">
@@ -123,8 +137,8 @@
                             <div class="d-flex justify-content-center flex-wrap gap-2">
 
                                 {{-- ================= ADMIN ================= --}}
-                                @if ($isAdmin)
-                                    {{-- OT FINALIZADA --}}
+                                @if ($isAdmin || $isAsesor)
+                                    <!-- OT FINALIZADA -->
                                     <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
                                         title="Ver orden de trabajo finalizada"
                                         @click="verOTFinalizada(workOrder.id_work_order)">
@@ -132,14 +146,16 @@
                                         OT Finalizada
                                     </button>
 
-                                    {{-- OT EN PROCESO / PENDIENTE --}}
-                                    <button v-else class="btn btn-outline-secondary btn-sm" title="Ver orden de trabajo"
-                                        @click="verOT(workOrder.id_work_order)">
-                                        <i class="fas fa-eye me-1"></i>
-                                        OT
-                                    </button>
+                                    <!-- OT EN PROGRESO -->
+                                    <span v-else-if="workOrder.status === 'in_progress'"
+                                        class="btn btn-success btn-sm disabled cursor-default">
+                                        <i class="fas fa-spinner me-1"></i>
+                                        OT Iniciada
+                                    </span>
 
-                                    {{-- SOLICITUD MATERIAL --}}
+
+
+                                    <!-- SOLICITUD MATERIAL PENDIENTE -->
                                     <button
                                         v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'pendiente'"
                                         class="btn btn-primary btn-sm" title="Cargar solicitud de material"
@@ -148,9 +164,10 @@
                                         Cargar solicitud
                                     </button>
 
+                                    <!-- SOLICITUD MATERIAL APROBADA -->
                                     <button
                                         v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'approved'"
-                                        class="btn btn-success btn-sm" title="Ver solicitud aprobada"
+                                        class="btn btn-outline-success btn-sm" title="Ver solicitud aprobada"
                                         @click="verSolicitud(workOrder.pedidos_materiales[0].id_pedido_material)">
                                         <i class="fas fa-eye me-1"></i>
                                         Ver solicitud
@@ -158,34 +175,57 @@
 
                                     {{-- ================= INSTALADOR ================= --}}
                                 @elseif ($isInstalador)
-                                    {{-- EN EJECUCIÓN --}}
-                                    <button v-if="workOrder.status === 'in_progress'"
-                                        class="btn btn-warning btn-sm text-dark" title="Asignar material"
-                                        @click="irAsignarMaterial(workOrder.id_work_order)">
-                                        <i class="fas fa-tools me-1"></i>
-                                        Material
-                                    </button>
+                                    {{-- ================= INSTALADOR ================= --}}
+                                    <div class="d-flex justify-content-center flex-wrap gap-2">
 
-                                    <button v-if="workOrder.status === 'in_progress'" class="btn btn-success btn-sm"
-                                        title="Finalizar orden de trabajo" @click="irFinalizarOT(workOrder.id_work_order)">
-                                        <i class="fas fa-check me-1"></i>
-                                        Finalizar OT
-                                    </button>
+                                        <!-- OT FINALIZADA -->
+                                        <button v-if="workOrder.status === 'completed'"
+                                                class="btn btn-success btn-sm"
+                                                title="Ver orden de trabajo finalizada"
+                                                @click="verOTFinalizada(workOrder.id_work_order)">
+                                            <i class="fas fa-check-circle me-1"></i>
+                                            Ver OT
+                                        </button>
 
-                                    {{-- FINALIZADA --}}
-                                    <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
-                                        title="Ver orden de trabajo finalizada"
-                                        @click="verOTFinalizada(workOrder.id_work_order)">
-                                        <i class="fas fa-check-circle me-1"></i>
-                                        Ver OT
-                                    </button>
+                                        <!-- OT EN EJECUCIÓN -->
+                                        <template v-else-if="workOrder.status === 'in_progress'">
 
-                                    {{-- PENDIENTE --}}
-                                    <button v-if="workOrder.status === 'pending'" class="btn btn-danger btn-sm"
-                                        title="Iniciar orden de trabajo" @click="iniciarOT(workOrder.id_work_order)">
-                                        <i class="fas fa-play me-1"></i>
-                                        Iniciar
-                                    </button>
+                                            <button class="btn btn-warning btn-sm text-dark"
+                                                    title="Asignar material"
+                                                    @click="irAsignarMaterial(workOrder.id_work_order)">
+                                                <i class="fas fa-tools me-1"></i>
+                                                Material
+                                            </button>
+
+                                            <button class="btn btn-success btn-sm"
+                                                    title="Finalizar orden de trabajo"
+                                                    @click="irFinalizarOT(workOrder.id_work_order)">
+                                                <i class="fas fa-check me-1"></i>
+                                                Finalizar OT
+                                            </button>
+
+                                        </template>
+
+                                        <!-- OT PENDIENTE -->
+                                        <template v-else-if="workOrder.status === 'pending'">
+
+                                            <button class="btn btn-danger btn-sm"
+                                                    title="Iniciar orden de trabajo"
+                                                    @click="iniciarOT(workOrder.id_work_order)">
+                                                <i class="fas fa-play me-1"></i>
+                                                Iniciar
+                                            </button>
+
+                                        </template>
+
+                                        <button class="btn btn-warning btn-sm text-dark"
+                                                title="Ver pedido de material"
+                                                @click="verPedidoMaterialHgi(workOrder.pedido)">
+                                            <i class="fas fa-file-alt me-1"></i>
+                                            Ver PD
+                                        </button>
+
+                                    </div>
                                 @endif
 
                             </div>
@@ -227,6 +267,78 @@
                 </div>
             </div>
         </div>
+
+
+        <!-- MODAL PEDIDO HGI -->
+        <div v-if="mostrarPedidoHgi"
+            class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+
+            <div class="bg-white w-[90vw] max-w-5xl rounded-xl shadow-2xl flex flex-col">
+
+                <!-- HEADER -->
+                <div class="flex items-center justify-between px-6 py-4 border-b bg-zinc-50 rounded-t-xl">
+                    <div>
+                        <h3 class="text-base font-semibold text-zinc-800">
+                            Pedido original HGI – @{{ pedidoHgi[0]?.pedido }}
+                        </h3>
+                        <p class="text-sm text-zinc-500">
+                            Cliente: <strong>@{{ pedidoHgi[0]?.cliente }}</strong>
+                        </p>
+                    </div>
+
+                    <button @click="cerrarPedidoHgi" class="text-zinc-400 hover:text-zinc-700 text-2xl leading-none">
+                        ×
+                    </button>
+                </div>
+
+                <!-- BODY -->
+                <div class="p-6 overflow-y-auto max-h-[65vh]">
+
+                    <table class="w-full text-sm border border-zinc-200 rounded-lg overflow-hidden">
+                        <thead class="bg-zinc-100">
+                            <tr>
+                                <th class="px-4 py-3 text-left w-[160px]">Código</th>
+                                <th class="px-4 py-3 text-left">Producto</th>
+                                <th class="px-4 py-3 text-center w-[140px]">Cantidad</th>
+                            </tr>
+                        </thead>
+
+                        <tbody>
+                            <tr v-for="p in pedidoHgi" :key="p.codigo_producto" class="border-t hover:bg-zinc-50">
+
+                                <td class="px-4 py-2 font-mono text-xs text-zinc-700">
+                                    @{{ p.codigo_producto }}
+                                </td>
+
+                                <td class="px-4 py-2">
+                                    @{{ p.producto }}
+                                </td>
+
+                                <td class="px-4 py-2 text-center font-semibold">
+                                    @{{ Number(p.cantidad).toFixed(2) }}
+                                </td>
+                            </tr>
+
+                            <tr v-if="pedidoHgi.length === 0">
+                                <td colspan="3" class="px-4 py-8 text-center text-zinc-500">
+                                    No hay productos en este pedido
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- FOOTER -->
+                <div class="flex justify-end px-6 py-4 bg-white border-t bg-zinc-50 rounded-b-xl">
+                    <button @click="cerrarPedidoHgi"
+                        class="px-5 py-2 text-sm rounded-md bg-zinc-700 text-black border-dark border ">
+                        Cerrar
+                    </button>
+                </div>
+
+            </div>
+        </div>
+        <!-- FIN MODAL PEDIDO HGI -->
 
 
 
@@ -271,7 +383,9 @@
                         notificaciones: @json($notificaciones ?? []),
                         mostrarNotificaciones: false,
                         toasts: [],
-
+                        selectedWorkOrderId: null,
+                        pedidoHgi: [],
+                        mostrarPedidoHgi: false,
 
                     }
                 },
@@ -308,6 +422,7 @@
 
                         }
                     }, 300);
+
                 },
 
                 computed: {
@@ -464,6 +579,28 @@
 
                     verOTFinalizada(id) {
                         window.location.href = routeVerOTFinalizada.replace(':id', id);
+                    },
+
+                    verPedidoMaterialHgi(workOrderId) {
+                        this.selectedWorkOrderId = workOrderId;
+                        this.cargarPedidoHgi(workOrderId);
+                    },
+
+                    async cargarPedidoHgi(workOrderId) {
+                        try {
+                            const resp = await fetch(`/ordenes-trabajo/${workOrderId}/pedido-hgi`);
+                            this.pedidoHgi = await resp.json();
+                            this.mostrarPedidoHgi = true;
+                        } catch (e) {
+                            console.error(e);
+                            this.pedidoHgi = [];
+                            this.mostrarPedidoHgi = false;
+                        }
+                    },
+
+                    cerrarPedidoHgi() {
+                        this.mostrarPedidoHgi = false;
+                        this.pedidoHgi = [];
                     }
 
                 }

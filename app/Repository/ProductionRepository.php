@@ -13,6 +13,7 @@ class ProductionRepository
 {
     protected $conn = 'sqlsrv';
 
+    // Listado de órdenes de trabajo (documentos 140) con datos relacionados de cliente, vendedor, posible factura y estado de facturación. Si se pasan filtros de fecha, se traducen a filtros por año/mes del documento.
     public function searchOrders(array $filters)
     {
         $ano = isset($filters['ano']) && (int) $filters['ano'] > 0 ? (int) $filters['ano'] : (int) now()->year;
@@ -138,6 +139,7 @@ class ProductionRepository
         return $rows->map(fn($r) => (array) $r)->toArray();
     }
 
+    // Detalle de OP (109) con posible enlace a factura (104) y su estado, sin filtrar por producto en el detalle. Si no se encuentra el documento, devuelve header vacío y lines vacío.
     public function getOrderDetail(string|int $ndoc, string $producto): array
     {
         $rows = DB::connection('sqlsrv')
@@ -231,6 +233,7 @@ class ProductionRepository
         return ['header' => $header, 'lines' => $lines];
     }
 
+    // Detalle de ficha de producción (141) con posible enlace a OP padre (140) y sus insumos desde TblEnsamble. Si se pasa producto, filtra solo ese insumo.
     public function getOrderDetailFicha(string|int $ndoc): array
     {
         $conn = \DB::connection('sqlsrv');
@@ -533,6 +536,7 @@ class ProductionRepository
         return $rows->map(fn($r) => (array) $r)->toArray();
     }*/
 
+    // VERSIÓN SIMPLIFICADA SOLO PARA VENTAS (sin detalle de luminaria, sin joins extra, solo filtros básicos y rango de fechas). Útil para asignar O.T a producción desde ventas.
     public function searchOrdersVentas(array $filters)
     {
         $ano = isset($filters['ano']) && (int) $filters['ano'] > 0 ? (int) $filters['ano'] : (int) now()->year;
@@ -636,6 +640,7 @@ class ProductionRepository
         return $rows->map(fn($r) => (array) $r)->toArray();
     }
 
+    // Detalle de OP (109) con posible enlace a factura (104) y su estado, filtrando por producto específico en el detalle. Si no se encuentra el documento, devuelve header vacío y lines vacío.
     public function getOrderDetailVentas(string|int $ndoc, string $producto): array
     {
         $rows = \DB::connection('sqlsrv')
@@ -686,6 +691,7 @@ class ProductionRepository
         return ['header' => $header, 'lines' => $lines];
     }
 
+    // Detalle de ficha de producción (141) con posible enlace a OP padre (140) y sus insumos desde TblEnsamble. Si se pasa producto, filtra solo ese insumo.
     public function getOrderDetailFichaProducto(string|int $ndoc, ?string $producto = null): array
     {
         $conn = \DB::connection('sqlsrv');
@@ -760,46 +766,64 @@ class ProductionRepository
         return ['header' => $hdr, 'lines' => $lines];
     }
 
-    public function getOrdenesTrabajo()
+    // Traer datos de pedidos (O.T) para asignar a producción, excluyendo los ya asignados (MySQL)
+    public function getOrdenesTrabajo($search = null, $vendedor = null)
     {
+        $documentosAsignados = \DB::connection('mysql')->table('work_orders')->pluck('n_documento')->toArray();
 
-        // 🔹 documentos ya asignados en MySQL
-        $documentosAsignados = \DB::connection('mysql')
-            ->table('work_orders')
-            ->pluck('n_documento')
-            ->toArray();
-
-
-        return \DB::connection('sqlsrv')
+        $query = \DB::connection('sqlsrv')
             ->table('TblDocumentos as t')
             ->join('TblTerceros as tc', 't.StrTercero', '=', 'tc.StrIdTercero')
             ->join('TblVendedores as tv', 't.StrDVendedor', '=', 'tv.StrIdVendedor')
-            ->leftJoin('TblDetalleDocumentos as d', function ($join) {
-                $join->on('d.IntDocRefD', '=', 't.IntDocumento')->where('d.IntTransaccion', 104); // FACTURA
+
+            // ✅ UNA factura por pedido
+            ->leftJoin(
+                \DB::raw("
+                (
+                    SELECT
+                        IntDocRefD,
+                        MAX(IntDocumento) AS IntDocumento
+                    FROM TblDetalleDocumentos
+                    WHERE IntTransaccion = 104
+                    GROUP BY IntDocRefD
+                ) d
+            "),
+                'd.IntDocRefD',
+                '=',
+                't.IntDocumento',
+            )
+
+            // 🔴 Excluir ya asignados
+            ->when(!empty($documentosAsignados), function ($q) use ($documentosAsignados) {
+                $q->whereNotIn('t.IntDocumento', $documentosAsignados);
             })
 
 
-        // 🔴 EXCLUIR LOS YA ASIGNADOS (MySQL)
-        ->when(!empty($documentosAsignados), function ($q) use ($documentosAsignados) {
-            $q->whereNotIn('t.IntDocumento', $documentosAsignados);
-        })
+            // 🔒 FILTRO AUTOMÁTICO POR ASESOR LOGUEADO
+            ->when($vendedor, function ($q) use ($vendedor) {
+                $q->where('tv.StrIdVendedor', $vendedor);
+            })
 
+            // 🔍 Búsqueda
+            ->when($search, function ($q) use ($search) {
+                $q->where(function ($sub) use ($search) {
+                    $sub->where('t.IntDocumento', 'like', "%{$search}%")
+                        ->orWhere('tc.StrNombre', 'like', "%{$search}%")
+                        ->orWhere('tv.StrNombre', 'like', "%{$search}%");
+                });
+            })
 
-            ->where('t.IntTransaccion', 109) // PEDIDO
+            ->where('t.IntTransaccion', 109)
             ->where('t.IntEstado', 0)
+
             ->select([
-                // ===== LO QUE VE LA TABLA =====
-                't.IntDocumento        as n_documento',
-                'tc.StrNombre          as tercero',
-                'tv.StrNombre          as vendedor',
-
-                // ===== DATOS DE SOPORTE PARA OT =====
-                'tv.StrIdVendedor      as vendedor_username',
-                't.IntPeriodo          as periodo',
-                't.IntAno              as ano',
-
-                // ===== FACTURACIÓN =====
-                'd.IntDocumento        as n_factura',
+                't.IntDocumento as n_documento',
+                'tc.StrNombre as tercero',
+                'tv.StrNombre as vendedor',
+                'tv.StrIdVendedor as vendedor_username',
+                't.IntPeriodo as periodo',
+                't.IntAno as ano',
+                'd.IntDocumento as n_factura',
                 \DB::raw("
                 CASE
                     WHEN d.IntDocumento IS NOT NULL
@@ -808,9 +832,14 @@ class ProductionRepository
                 END AS estado
             "),
             ])
+
             ->orderByDesc('t.IntAno')
             ->orderByDesc('t.IntPeriodo')
-            ->orderByDesc('t.IntDocumento')
-            ->paginate(10); // IMPORTANTE: usas ->links()
+            ->orderByDesc('t.IntDocumento');
+
+        // ✅ AQUÍ ESTABA EL PROBLEMA
+        return $search
+            ? $query->get() // 🔍 sin paginar
+            : $query->paginate(50); // 📄 paginado
     }
 }

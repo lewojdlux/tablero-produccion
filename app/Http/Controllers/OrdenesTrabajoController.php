@@ -31,10 +31,19 @@ class OrdenesTrabajoController
     /**
      * Display a listing of the resource.
      */
-    public function index()
+    public function index( Request $request)
     {
         //
-  $ordenesTrabajo = $this->orderWorkService->getOrdenesTrabajo();
+
+            $user = Auth::user();
+
+            $vendedor = null;
+            if ((int) $user->perfil_usuario_id === 5) {
+                $vendedor = $user->identificador_asesor;
+            }
+
+
+            $ordenesTrabajo = $this->orderWorkService->getOrdenesTrabajo($request->search,  $vendedor);
             $instaladores = InstaladorModel::all();
 
             return view('workorders.index', [
@@ -105,6 +114,7 @@ class OrdenesTrabajoController
                 'n_factura' => $request->n_factura,
                 'status' => $request->status,
                 'description' => $request->obsv_pedido,
+                'usereg_ot' => Auth::user()->id,
             ]);
             return response()->json([
                 'success' => true,
@@ -123,10 +133,19 @@ class OrdenesTrabajoController
     {
         //
         try {
-            $ordenesTrabajo = $this->orderWorkService->getOrderAsignados();
 
-            // Si el usuario no es admin NO tiene sentido mostrar notificaciones
-            $usuario = auth()->user();
+            $usuario = Auth::user();
+
+            $vendedor = null;
+            if ((int) $usuario->perfil_usuario_id === 5) {
+                $vendedor = $usuario->id;
+            }
+
+
+
+            $ordenesTrabajo = $this->orderWorkService->getOrderAsignados($vendedor);
+
+
 
             $notificaciones = in_array($usuario->perfil_usuario_id, [1, 2]) ? $usuario->unreadNotifications()->orderBy('created_at', 'desc')->get() : collect(); // vacío para instaladores
 
@@ -138,6 +157,22 @@ class OrdenesTrabajoController
             // Manejo de errores
             return response()->view('errors.500', ['message' => $e->getMessage()], 500);
         }
+    }
+
+    /* función para obtener el material de una orden de trabajo HGI */
+    public function verPedidoMaterialHgi($workOrderId)
+    {
+        $user = Auth::user();
+
+
+        // 🔒 Seguridad: solo instalador
+        if ((int)$user->perfil_usuario_id !== 7) {
+            abort(403);
+        }
+
+        $pedido = $this->orderWorkService->getPedidoHgiPorOT($workOrderId);
+
+        return response()->json($pedido);
     }
 
     /* función para iniciar una orden de trabajo */
@@ -437,10 +472,26 @@ class OrdenesTrabajoController
     // función para mostrar el formulario de finalización de orden de trabajo
     public function finalizarForm($id)
     {
-        $ordenTrabajo = OrderWorkModel::findOrFail($id);
-        return view('workorders.finalizar', [
-            'ordenTrabajo' => $ordenTrabajo,
-        ]);
+        try{
+
+            $count = WorkOrdersMaterialsModel::where('work_order_id', $id)->count();
+
+            if($count === 0){
+                return redirect()
+                    ->route('ordenes.trabajo.asignados')
+                    ->with('error', 'No se puede finalizar la orden de trabajo porque no tiene materiales asignados.');
+            }
+
+            $ordenTrabajo = OrderWorkModel::findOrFail($id);
+            return view('workorders.finalizar', [
+                'ordenTrabajo' => $ordenTrabajo,
+            ]);
+
+
+        }catch (\Exception $e) {
+            // Manejo de errores
+            return response()->view('errors.500', ['message' => $e->getMessage()], 500);
+        }
     }
 
     // función para finalizar una orden de trabajo

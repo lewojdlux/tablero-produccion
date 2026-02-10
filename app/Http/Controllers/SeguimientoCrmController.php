@@ -41,7 +41,7 @@ class SeguimientoCrmController
      */
     public function data(Request $request)
     {
-$page = (int) $request->get('page', 1);
+            $page = (int) $request->get('page', 1);
             $perPage = (int) $request->get('per_page', 10);
 
             $filters = [
