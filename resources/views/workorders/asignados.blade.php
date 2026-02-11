@@ -172,7 +172,6 @@
                                         <i class="fas fa-eye me-1"></i>
                                         Ver solicitud
                                     </button>
-
                                 @elseif ($isAsesor)
                                     {{-- ================= ASESOR ================= --}}
                                     <!-- OT FINALIZADA -->
@@ -196,10 +195,9 @@
                                     <div class="d-flex justify-content-center flex-wrap gap-2">
 
                                         <!-- OT FINALIZADA -->
-                                        <button v-if="workOrder.status === 'completed'"
-                                                class="btn btn-success btn-sm"
-                                                title="Ver orden de trabajo finalizada"
-                                                @click="verOTFinalizada(workOrder.id_work_order)">
+                                        <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
+                                            title="Ver orden de trabajo finalizada"
+                                            @click="verOTFinalizada(workOrder.id_work_order)">
                                             <i class="fas fa-check-circle me-1"></i>
                                             Ver OT
                                         </button>
@@ -207,16 +205,14 @@
                                         <!-- OT EN EJECUCIÓN -->
                                         <template v-else-if="workOrder.status === 'in_progress'">
 
-                                            <button class="btn btn-warning btn-sm text-dark"
-                                                    title="Asignar material"
-                                                    @click="irAsignarMaterial(workOrder.id_work_order)">
+                                            <button class="btn btn-warning btn-sm text-dark" title="Asignar material"
+                                                @click="irAsignarMaterial(workOrder.id_work_order)">
                                                 <i class="fas fa-tools me-1"></i>
                                                 Material
                                             </button>
 
-                                            <button class="btn btn-success btn-sm"
-                                                    title="Finalizar orden de trabajo"
-                                                    @click="irFinalizarOT(workOrder.id_work_order)">
+                                            <button class="btn btn-success btn-sm" title="Finalizar orden de trabajo"
+                                                @click="irFinalizarOT(workOrder.id_work_order)">
                                                 <i class="fas fa-check me-1"></i>
                                                 Finalizar OT
                                             </button>
@@ -226,18 +222,16 @@
                                         <!-- OT PENDIENTE -->
                                         <template v-else-if="workOrder.status === 'pending'">
 
-                                            <button class="btn btn-danger btn-sm"
-                                                    title="Iniciar orden de trabajo"
-                                                    @click="iniciarOT(workOrder.id_work_order)">
+                                            <button class="btn btn-danger btn-sm" title="Iniciar orden de trabajo"
+                                                @click="iniciarOT(workOrder.id_work_order)">
                                                 <i class="fas fa-play me-1"></i>
                                                 Iniciar
                                             </button>
 
                                         </template>
 
-                                        <button class="btn btn-warning btn-sm text-dark"
-                                                title="Ver pedido de material"
-                                                @click="verPedidoMaterialHgi(workOrder.pedido)">
+                                        <button class="btn btn-warning btn-sm text-dark" title="Ver pedido de material"
+                                            @click="verPedidoMaterialHgi(workOrder.pedido)">
                                             <i class="fas fa-file-alt me-1"></i>
                                             Ver PD
                                         </button>
@@ -314,16 +308,21 @@
                     <table class="w-full text-sm border border-zinc-200 rounded-lg overflow-hidden">
                         <thead class="bg-zinc-100">
                             <tr>
-                                <th class="px-4 py-3 text-left w-[160px]">Código</th>
+                                <th class="px-4 py-3 text-left">Código</th>
                                 <th class="px-4 py-3 text-left">Producto</th>
-                                <th class="px-4 py-3 text-center w-[140px]">Cantidad</th>
+                                <th class="px-4 py-3 text-center">Cant.</th>
+                                <th class="px-4 py-3 text-right">Vlr Unit</th>
+                                <th class="px-4 py-3 text-right">Subtotal</th>
+                                <th class="px-4 py-3 text-right">IVA</th>
+                                <th class="px-4 py-3 text-right">Total</th>
                             </tr>
                         </thead>
+
 
                         <tbody>
                             <tr v-for="p in pedidoHgi" :key="p.codigo_producto" class="border-t hover:bg-zinc-50">
 
-                                <td class="px-4 py-2 font-mono text-xs text-zinc-700">
+                                <td class="px-4 py-2 font-mono text-xs">
                                     @{{ p.codigo_producto }}
                                 </td>
 
@@ -331,10 +330,27 @@
                                     @{{ p.producto }}
                                 </td>
 
-                                <td class="px-4 py-2 text-center font-semibold">
+                                <td class="px-4 py-2 text-center">
                                     @{{ Number(p.cantidad).toFixed(2) }}
                                 </td>
+
+                                <td class="px-4 py-2 text-right">
+                                    $ @{{ Number(p.valor_unitario).toLocaleString() }}
+                                </td>
+
+                                <td class="px-4 py-2 text-right">
+                                    $ @{{ Number(p.subtotal).toLocaleString() }}
+                                </td>
+
+                                <td class="px-4 py-2 text-right">
+                                    $ @{{ Number(p.valor_iva).toLocaleString() }}
+                                </td>
+
+                                <td class="px-4 py-2 text-right font-semibold">
+                                    $ @{{ Number(p.total_con_iva).toLocaleString() }}
+                                </td>
                             </tr>
+
 
                             <tr v-if="pedidoHgi.length === 0">
                                 <td colspan="3" class="px-4 py-8 text-center text-zinc-500">

@@ -816,6 +816,16 @@ class ProductionRepository
             ->where('t.IntTransaccion', 109)
             ->where('t.IntEstado', 0)
 
+
+            // 🔎 Solo pedidos que tengan aplicado servicio de instalación
+            ->whereExists(function ($q) {
+                $q->select(DB::raw(1))
+                ->from('TblDetalleDocumentos as dd')
+                ->join('TblProductos as pp', 'pp.StrIdProducto', '=', 'dd.StrProducto')
+                ->whereColumn('dd.IntDocumento', 't.IntDocumento')
+                ->where('pp.StrLinea', '40');
+            })
+
             ->select([
                 't.IntDocumento as n_documento',
                 'tc.StrNombre as tercero',

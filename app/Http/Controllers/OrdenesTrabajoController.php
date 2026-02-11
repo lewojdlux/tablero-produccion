@@ -462,11 +462,11 @@ class OrdenesTrabajoController
     public function finalizarForm($id)
     {
         try {
-            $count = WorkOrdersMaterialsModel::where('work_order_id', $id)->count();
+            /*$count = WorkOrdersMaterialsModel::where('work_order_id', $id)->count();
 
-            if ($count === 0) {
+            /*if ($count === 0) {
                 return redirect()->route('ordenes.trabajo.asignados')->with('error', 'No se puede finalizar la orden de trabajo porque no tiene materiales asignados.');
-            }
+            }*/
 
             $ordenTrabajo = OrderWorkModel::findOrFail($id);
             return view('workorders.finalizar', [

@@ -107,17 +107,27 @@ class OrderWorkRepository
             ->join('TblProductos as p', 'p.StrIdProducto', '=', 'd.StrProducto')
             ->where('t.IntDocumento', $workOrderId)
             ->where('d.IntTransaccion', 109) // PEDIDO
+            //->where('p.StrLinea', '=', 40) // Excluir anulados
             ->select([
                 't.IntDocumento as pedido',
                 'tc.StrNombre as cliente',
                 'p.StrIdProducto      as codigo_producto',
                 'p.StrDescripcion as producto',
                 'd.IntCantidad as cantidad',
+
+                'd.IntCantidad as cantidad',
+                'd.IntValorUnitario as valor_unitario',
+                'd.IntValorIva as valor_iva',
+                'd.IntValorDescuento as valor_descuento',
+
+                DB::raw('(d.IntCantidad * d.IntValorUnitario) as subtotal'),
+                DB::raw('(d.IntCantidad * d.IntValorUnitario) * 1.19 as total_con_iva'),
             ])
             ->get();
     }
 
 
+    // función para obtener el detalle de una orden de trabajo por número de documento
     public function getMaterialsByOrderId($orderId)
     {
         return DB::table('work_orders_materials as wom')
@@ -134,24 +144,27 @@ class OrderWorkRepository
         ->get();
     }
 
+    // función para buscar materiales por nombre o código
     public function getMaterialsByMaterialName($materialName)
     {
         return MaterialModel::where('nombre_material', 'like', '%' . $materialName . '%')->orWhere('codigo_material', 'like', '%' . $materialName . '%')
         ->get();
     }
 
-
+    // función para buscar materiales por nombre o código
     public function findOrFail(int $id): OrderWorkModel
     {
         return $this->orderWorkModel->findOrFail($id);
     }
 
+    // función para actualizar una orden de trabajo por ID
     public function updateById(int $id, array $data): bool
     {
         return $this->orderWorkModel->where('id_work_order', $id)
             ->update($data);
     }
 
+    // función para eliminar una orden de trabajo por ID
     public function crearJornada(array $data){
         return $this->ordenTrabajoModel->updateOrCreate(  [
             'orden_trabajo_id' => $data['orden_trabajo_id'],
