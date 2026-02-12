@@ -7,12 +7,10 @@
         Orden de Trabajo Finalizada #{{ $ordenTrabajo->n_documento }}
     </h2>
 
-    {{-- MENSAJES --}}
-    @if (session('success'))
-        <div class="mb-4 p-3 rounded bg-green-100 text-green-800 border border-green-300 text-sm">
-            {{ session('success') }}
-        </div>
-    @endif
+    @php
+        $perfil = (int) (auth()->user()->perfil_usuario_id ?? 0);
+        $isAdmin = in_array($perfil, [1, 2, 6], true);
+    @endphp
 
     {{-- INFORMACIÓN GENERAL --}}
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-sm">
@@ -30,39 +28,12 @@
                     Finalizada
                 </span>
             </p>
-            <p><strong>Finalizada por:</strong>  {{ optional($ordenTrabajo->UsuariosOT)->name ?? '—' }}</p>
+            <p><strong>Finalizada por:</strong> {{ optional($ordenTrabajo->UsuariosOT)->name ?? '—' }}</p>
         </div>
 
     </div>
 
-    {{-- CONTROL DE TIEMPOS --}}
-    <div class="border rounded-lg p-5 bg-zinc-50 mb-6 text-sm">
-
-        <h3 class="font-semibold mb-2">⏱️ Control de Mano de Obra</h3>
-
-        <div class="grid grid-cols-2 gap-4">
-            <div>
-                <p><strong>Inicio real:</strong></p>
-                <p>{{ \Carbon\Carbon::parse($ordenTrabajo->started_at)->format('Y-m-d H:i') }}</p>
-            </div>
-
-            <div>
-                <p><strong>Final real:</strong></p>
-                <p>{{ \Carbon\Carbon::parse($ordenTrabajo->finished_at)->format('Y-m-d H:i') }}</p>
-            </div>
-        </div>
-
-        <div class="mt-3">
-            <p>
-                <strong>Duración total:</strong>
-                {{ intdiv($ordenTrabajo->duration_minutes, 60) }} h
-                {{ $ordenTrabajo->duration_minutes % 60 }} min
-            </p>
-        </div>
-
-    </div>
-
-    {{-- DESCRIPCIÓN Y NOVEDADES --}}
+    {{-- DESCRIPCIÓN --}}
     <div class="mb-6 text-sm">
         <h3 class="font-semibold mb-2">📝 Descripción / Novedades</h3>
 
@@ -71,10 +42,122 @@
         </div>
     </div>
 
-    {{-- ACCIONES --}}
+    {{-- ================= RESUMEN FINANCIERO ================= --}}
+    <div class="border rounded-lg p-5 bg-white mb-6 text-sm shadow-sm">
+
+        <h3 class="font-semibold mb-4 text-base">
+            💰 Resumen OT
+        </h3>
+
+        {{-- MANO DE OBRA --}}
+        <div class="mb-6">
+            <h4 class="font-semibold mb-2">Mano de Obra</h4>
+
+            <table class="w-full text-xs border">
+                <thead class="bg-zinc-100">
+                    <tr>
+                        <th class="px-2 py-2 text-left">Tipo</th>
+                        <th class="px-2 py-2 text-center">Horas</th>
+                        <th class="px-2 py-2 text-right">Valor Hora</th>
+                        <th class="px-2 py-2 text-right">Total</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    @foreach ($manoObra as $m)
+                        <tr class="border-t">
+                            <td class="px-2 py-2">
+                                {{ $m->tipo }} - {{ $m->nombre_instalador }}
+                            </td>
+
+                            <td class="px-2 py-2 text-center">
+                                {{ number_format($m->horas, 2) }}
+                            </td>
+
+                            <td class="px-2 py-2 text-right">
+                                @if($isAdmin)
+                                    $ {{ number_format($m->valor_hora, 0, ',', '.') }}
+                                @else
+                                    —
+                                @endif
+                            </td>
+
+                            <td class="px-2 py-2 text-right font-semibold">
+                                @if($isAdmin)
+                                    $ {{ number_format($m->total, 0, ',', '.') }}
+                                @else
+                                    —
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+
+                <tfoot>
+                    <tr class="border-t bg-zinc-50">
+                        <td colspan="3" class="text-right px-2 py-2 font-semibold">
+                            Total Mano de Obra
+                        </td>
+                        <td class="text-right px-2 py-2 font-bold">
+                            @if($isAdmin)
+                                $ {{ number_format($manoObraTotal, 0, ',', '.') }}
+                            @else
+                                —
+                            @endif
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        {{-- TOTALES GENERALES --}}
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            <div class="border p-4 rounded bg-zinc-50">
+                <p class="text-sm text-zinc-600">Total Pedido</p>
+                <p class="text-xl font-bold">
+                    @if($isAdmin)
+                        $ {{ number_format($pedidoTotal, 0, ',', '.') }}
+                    @else
+                        —
+                    @endif
+                </p>
+            </div>
+
+            <div class="border p-4 rounded bg-zinc-50">
+                <p class="text-sm text-zinc-600">Total Material Adicional</p>
+                <p class="text-xl font-bold">
+                    @if($isAdmin)
+                        $ {{ number_format($solicitudTotal, 0, ',', '.') }}
+                    @else
+                        —
+                    @endif
+                </p>
+            </div>
+
+            <div class="border p-4 rounded bg-zinc-50 col-span-1 md:col-span-2">
+                <p class="text-sm text-zinc-600">Utilidad</p>
+
+                @if($isAdmin)
+                    <p class="text-2xl font-bold 
+                        {{ $utilidad >= 0 ? 'text-green-600' : 'text-red-600' }}">
+                        $ {{ number_format($utilidad, 0, ',', '.') }}
+                    </p>
+                @else
+                    <p class="text-lg font-semibold text-zinc-500">
+                        Información restringida
+                    </p>
+                @endif
+            </div>
+
+        </div>
+
+    </div>
+
+    
+
     <div class="flex justify-end gap-2">
-        <a href="{{ route('ordenes.trabajo.asignados') }}"
-           class="btn btn-secondary">
+        <a href="{{ route('orders.pending.list') }}" class="btn btn-secondary">
             Volver
         </a>
     </div>

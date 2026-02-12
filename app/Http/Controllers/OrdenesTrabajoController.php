@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Events\MaterialSolicitadoEvent;
+use App\Exports\OrdenTrabajoFinancieroExport;
 use App\Models\InstaladorModel;
 use App\Models\OrdenTrabajoModel;
 use App\Models\OrderWorkModel;
@@ -19,7 +20,7 @@ use Illuminate\Support\Facades\DB;
 use App\Notifications\MaterialSolicitadoNotification;
 use App\Notifications\NewPedidoMaterial;
 use Illuminate\Support\Facades\Notification;
-
+use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
 
 class OrdenesTrabajoController
@@ -468,9 +469,20 @@ class OrdenesTrabajoController
                 return redirect()->route('ordenes.trabajo.asignados')->with('error', 'No se puede finalizar la orden de trabajo porque no tiene materiales asignados.');
             }*/
 
+            $user = Auth::user();
+
+            if ($user->perfil_usuario_id === 7) {
+                // Si es instalador → traer todos menos él
+                $instaladores = \DB::table('instalador')->where('status', 'active')->where('identificador_usuario', '!=', $user->identificador_instalador)->select('id_instalador', 'nombre_instalador')->orderBy('nombre_instalador')->get();
+            } else {
+                // Si NO es instalador → traer todos
+                $instaladores = \DB::table('instalador')->where('status', 'active')->select('id_instalador', 'nombre_instalador')->orderBy('nombre_instalador')->get();
+            }
+
             $ordenTrabajo = OrderWorkModel::findOrFail($id);
             return view('workorders.finalizar', [
                 'ordenTrabajo' => $ordenTrabajo,
+                'instaladores' => $instaladores,
             ]);
         } catch (\Exception $e) {
             // Manejo de errores
@@ -490,40 +502,44 @@ class OrdenesTrabajoController
     // función para registrar jornadas de una orden de trabajo
     public function OTJornada(Request $request, int $workorder)
     {
-
         try {
-                // 1️⃣ Validación
-                $request->validate([
-                    'jornadas' => 'required|array|min:1',
-                    'jornadas.*.fecha' => 'required|date',
-                    'jornadas.*.hora_inicio' => 'required',
-                    'jornadas.*.hora_fin' => 'required',
-                    'jornadas.*.observaciones' => 'nullable|string',
-                    //'installation_notes' => 'required|string|min:10',
-                ]);
+            // 1️⃣ Validación
+            $request->validate([
+                'jornadas' => 'required|array|min:1',
+                'jornadas.*.fecha' => 'required|date',
+                'jornadas.*.hora_inicio' => 'required',
+                'jornadas.*.hora_fin' => 'required',
+                'jornadas.*.observaciones' => 'nullable|string',
+                'jornadas.*.instaladores' => 'nullable|array',
+                //'installation_notes' => 'required|string|min:10',
+            ]);
 
-                // 2️⃣ Finalizar OT (estado general)
-                $this->orderWorkService->registrarJornadas($workorder, $request->jornadas, Auth::user()->id);
+            // 2️⃣ Finalizar OT (estado general)
+            $this->orderWorkService->registrarJornadas($workorder, $request->jornadas, Auth::user()->id);
 
-                return response()->json([
+            return response()->json(
+                [
                     'type' => 'success',
-                    'message' => 'Jornadas registradas correctamente.'
-                ], 200);
-
-
+                    'message' => 'Jornadas registradas correctamente.',
+                ],
+                200,
+            );
         } catch (\Illuminate\Validation\ValidationException $e) {
-
-            return response()->json([
-                'type' => 'warning',
-                'message' => collect($e->errors())->first()[0]
-            ], 422);
-
+            return response()->json(
+                [
+                    'type' => 'warning',
+                    'message' => collect($e->errors())->first()[0],
+                ],
+                422,
+            );
         } catch (\Throwable $e) {
-
-            return response()->json([
-                'type' => 'error',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(
+                [
+                    'type' => 'error',
+                    'message' => $e->getMessage(),
+                ],
+                500,
+            );
         }
     }
 
@@ -531,42 +547,43 @@ class OrdenesTrabajoController
     public function finalizar(Request $request, int $workorder)
     {
         try {
-
             $count = OrdenTrabajoModel::where('orden_trabajo_id', $workorder)->count();
 
             if ($count === 0) {
-                return response()->json([
-                    'type' => 'error',
-                    'message' => 'No se puede finalizar la orden de trabajo porque no tiene jornadas registradas.'
-                ], 422);
+                return response()->json(
+                    [
+                        'type' => 'error',
+                        'message' => 'No se puede finalizar la orden de trabajo porque no tiene jornadas registradas.',
+                    ],
+                    422,
+                );
             }
 
-            $request->validate([
-                'installation_notes' => 'required|string|min:10',
-            ],
-            [
-                'installation_notes.required' => 'Las notas de instalación son obligatorias.',
-                'installation_notes.string' => 'Las notas de instalación deben ser un texto válido.',
-                'installation_notes.min' => 'Las notas de instalación deben tener al menos :min caracteres.',
-            ]);
-
-            $this->orderWorkService->finalizarOT(
-                $workorder,
-                now()->toDateTimeString(),
-                $request->installation_notes,
-                auth()->id()
+            $request->validate(
+                [
+                    'installation_notes' => 'required|string|min:10',
+                ],
+                [
+                    'installation_notes.required' => 'Las notas de instalación son obligatorias.',
+                    'installation_notes.string' => 'Las notas de instalación deben ser un texto válido.',
+                    'installation_notes.min' => 'Las notas de instalación deben tener al menos :min caracteres.',
+                ],
             );
+
+            $this->orderWorkService->finalizarOT($workorder, now()->toDateTimeString(), $request->installation_notes, auth()->id());
 
             return response()->json([
                 'type' => 'success',
-                'message' => 'Orden de trabajo finalizada correctamente.'
+                'message' => 'Orden de trabajo finalizada correctamente.',
             ]);
-
         } catch (\Throwable $e) {
-            return response()->json([
-                'type' => 'error',
-                'message' => $e->getMessage()
-            ], 500);
+            return response()->json(
+                [
+                    'type' => 'error',
+                    'message' => $e->getMessage(),
+                ],
+                500,
+            );
         }
     }
 
@@ -576,12 +593,156 @@ class OrdenesTrabajoController
         try {
             $ordenTrabajo = OrderWorkModel::with(['instalador', 'pedidosMateriales.instalador', 'pedidosMateriales.items', 'UsuariosOT'])->findOrFail($id);
 
+            if ($ordenTrabajo->status !== 'completed') {
+                return redirect()->route('workorders.index')->with('error', 'La orden no está finalizada.');
+            }
+
+            $manoObra = DB::table('vw_calculo_mano_obra_ot')->where('id_work_order', $id)->get();
+
+            $manoObraTotal = $manoObra->sum('total');
+
+            $solicitudTotal =
+                DB::table('detalle_solicitud_material as dsm')
+                    ->join('pedidos_materiales as pm', 'pm.id_pedido_material', '=', 'dsm.solicitud_material_id')
+                    ->where('pm.orden_trabajo_id', $id)
+                    ->selectRaw(
+                        '
+                            CAST(
+                                SUM((dsm.cantidad * dsm.precio_unitario) - IFNULL(dsm.descuento,0))
+                            AS DECIMAL(18,2)) as total_material
+                        ',
+                    )
+                    ->value('total_material') ?? 0;
+
+            $pedidoTotal =
+                DB::connection('sqlsrv')
+                    ->table('TblDetalleDocumentos as d')
+                    ->join('TblProductos as p', 'p.StrIdProducto', '=', 'd.StrProducto')
+                    ->where('d.IntDocumento', $ordenTrabajo->pedido)
+                    ->where('d.IntTransaccion', 109)
+                    ->where('p.StrLinea', 40)
+                    ->selectRaw(
+                        '
+                            CAST(
+                                SUM((d.IntCantidad * d.IntValorUnitario) - ISNULL(d.IntValorDescuento,0))
+                            AS DECIMAL(18,2)
+                        ) as total_pedido
+                        ',
+                    )
+                    ->value('total_pedido') ?? 0;
+
+            $utilidad = $pedidoTotal - $manoObraTotal - $solicitudTotal;
+
             return view('workorders.finalizadashow', [
                 'ordenTrabajo' => $ordenTrabajo,
+                'manoObra' => $manoObra,
+                'manoObraTotal' => $manoObraTotal,
+                'solicitudTotal' => $solicitudTotal,
+                'pedidoTotal' => $pedidoTotal,
+                'utilidad' => $utilidad,
             ]);
-        } catch (\Exception $e) {
-            // Manejo de errores
-            return response()->view('errors.500', ['message' => $e->getMessage()], 500);
+        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
+            return redirect()->route('workorders.index')->with('error', 'La orden de trabajo no existe.');
+        } catch (\Throwable $e) {
+            \Log::error('Error al abrir OT finalizada', [
+                'id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->route('workorders.index')->with('error', 'Ocurrió un error cargando la orden.');
+        }
+    }
+
+    // función para obtener el cálculo de mano de obra de una orden de trabajo
+    public function manoDeObra(Request $request, $id)
+    {
+        $user = Auth::user();
+        $perfilAutorizado = [1, 2, 6]; // ADMIN, SUPER y ASESOR
+
+        // Seguridad extra por backend
+        if (!in_array($user->perfil_usuario_id, $perfilAutorizado)) {
+            abort(403);
+        }
+
+        $pedido = $request->pedido;
+
+        // 🔹 Mano de obra
+        $manoObra = DB::table('vw_calculo_mano_obra_ot')->where('id_work_order', $id)->get();
+
+        $manoObraTotal = $manoObra->sum('total');
+
+        /// cálcular si tiene servicios adicionales a la OT
+        $solicitudTotal =
+            DB::table('detalle_solicitud_material as dsm')
+                ->join('pedidos_materiales as pm', 'pm.id_pedido_material', '=', 'dsm.solicitud_material_id')
+                ->where('pm.orden_trabajo_id', $id)
+                ->selectRaw(
+                    '
+            CAST(
+                SUM(
+                    (dsm.cantidad * dsm.precio_unitario)
+                    - IFNULL(dsm.descuento,0)
+                )
+            AS DECIMAL(18,2)
+            ) as total_material
+        ',
+                )
+                ->value('total_material') ?? 0;
+
+        // 🔹 Pedido HGI (línea 40)
+        $pedidoTotal =
+            DB::connection('sqlsrv')
+                ->table('TblDetalleDocumentos as d')
+                ->join('TblProductos as p', 'p.StrIdProducto', '=', 'd.StrProducto')
+                ->where('d.IntDocumento', $pedido)
+                ->where('d.IntTransaccion', 109)
+                ->where('p.StrLinea', 40)
+                ->selectRaw(
+                    '
+                        CAST(
+                            SUM(
+                                (d.IntCantidad * d.IntValorUnitario)
+                                - ISNULL(d.IntValorDescuento,0)
+                            )
+                        AS DECIMAL(18,2)) as total_pedido
+                    ',
+                )
+                ->value('total_pedido') ?? 0;
+
+        return response()->json([
+            'mano_obra' => $manoObra,
+            'mano_obra_total' => $manoObraTotal,
+            'solicitud_total' => $solicitudTotal,
+            'pedido_total' => $pedidoTotal,
+            'utilidad' => $pedidoTotal - $manoObraTotal - $solicitudTotal,
+        ]);
+    }
+
+    // función para exportar el resumen financiero de una orden de trabajo a Excel
+    public function exportarFinancieroExcel($id)
+    {
+        try {
+            // Validar que la OT exista
+            $orden = \DB::table('work_orders')->where('id_work_order', $id)->first();
+
+            if (!$orden) {
+                return redirect()->back()->with('error', 'La orden de trabajo no existe.');
+            }
+
+            // Validar que tenga pedido
+            if (empty($orden->pedido)) {
+                return redirect()->back()->with('error', 'La OT no tiene pedido asociado.');
+            }
+
+            return Excel::download(new OrdenTrabajoFinancieroExport($id), "OT_{$id}_Resumen_Financiero.xlsx");
+        } catch (\Throwable $e) {
+            // Log interno
+            Log::error('Error exportando OT financiero', [
+                'id_ot' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return redirect()->back()->with('error', 'Ocurrió un error al generar el Excel.');
         }
     }
 }

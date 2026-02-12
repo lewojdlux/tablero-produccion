@@ -90,6 +90,7 @@
         @php
             $perfil = (int) (auth()->user()->perfil_usuario_id ?? 0);
             $isAdmin = in_array($perfil, [1, 2], true);
+            $isAdminInstalador = $perfil === 6;
             $isInstalador = $perfil === 7;
             $isAsesor = $perfil === 5;
         @endphp
@@ -137,13 +138,20 @@
                             <div class="d-flex justify-content-center flex-wrap gap-2">
 
                                 {{-- ================= ADMIN ================= --}}
-                                @if ($isAdmin)
+                                @if ($isAdmin || $isAdminInstalador)
                                     <!-- OT FINALIZADA -->
                                     <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
-                                        title="Ver orden de trabajo finalizada"
-                                        @click="verOTFinalizada(workOrder.id_work_order)">
+                                        title="Ver orden finalizada" @click="verOTFinalizada(workOrder.id_work_order)">
                                         <i class="fas fa-check-circle me-1"></i>
                                         OT Finalizada
+                                    </button>
+
+                                    <!-- 👇 MANO DE OBRA SOLO SI ESTÁ COMPLETADA -->
+                                    <button v-if="workOrder.status === 'completed'" class="btn btn-info btn-sm"
+                                        title="Ver mano de obra"
+                                        @click="verManoObra(workOrder.id_work_order, workOrder.pedido)">
+                                        <i class="fas fa-money-bill-wave me-1"></i>
+                                        Mano de Obra
                                     </button>
 
                                     <!-- OT EN PROGRESO -->
@@ -152,8 +160,6 @@
                                         <i class="fas fa-spinner me-1"></i>
                                         OT Iniciada
                                     </span>
-
-
 
                                     <!-- SOLICITUD MATERIAL PENDIENTE -->
                                     <button
@@ -313,14 +319,15 @@
                                 <th class="px-4 py-3 text-center">Cant.</th>
                                 <th class="px-4 py-3 text-right">Vlr Unit</th>
                                 <th class="px-4 py-3 text-right">Subtotal</th>
-                                <th class="px-4 py-3 text-right">IVA</th>
+                                <th class="px-4 py-3 text-right">Descuento</th>
                                 <th class="px-4 py-3 text-right">Total</th>
                             </tr>
                         </thead>
 
 
                         <tbody>
-                            <tr v-for="p in pedidoHgi" :key="p.codigo_producto" class="border-t hover:bg-zinc-50">
+                            <tr v-for="(p, index) in pedidoHgi":key="p.codigo_producto + '-' + index"
+                                class="border-t hover:bg-zinc-50">
 
                                 <td class="px-4 py-2 font-mono text-xs">
                                     @{{ p.codigo_producto }}
@@ -331,23 +338,23 @@
                                 </td>
 
                                 <td class="px-4 py-2 text-center">
-                                    @{{ Number(p.cantidad).toFixed(2) }}
+                                    @{{ Number(p.cantidad || 0).toFixed(2) }}
                                 </td>
 
-                                <td class="px-4 py-2 text-right">
-                                    $ @{{ Number(p.valor_unitario).toLocaleString() }}
+                                <td class="text-end">
+                                    $ @{{ Number(p.valor_unitario || 0).toLocaleString('es-CO') }}
                                 </td>
 
-                                <td class="px-4 py-2 text-right">
-                                    $ @{{ Number(p.subtotal).toLocaleString() }}
+                                <td class="text-end">
+                                    $ @{{ Number(p.subtotal || 0).toLocaleString('es-CO') }}
                                 </td>
 
-                                <td class="px-4 py-2 text-right">
-                                    $ @{{ Number(p.valor_iva).toLocaleString() }}
+                                <td class="text-end text-danger">
+                                    $ @{{ Number(p.valor_descuento || 0).toLocaleString('es-CO') }}
                                 </td>
 
-                                <td class="px-4 py-2 text-right font-semibold">
-                                    $ @{{ Number(p.total_con_iva).toLocaleString() }}
+                                <td class="text-end fw-bold text-success">
+                                    $ @{{ Number(p.total_con_descuento || 0).toLocaleString('es-CO') }}
                                 </td>
                             </tr>
 
@@ -372,6 +379,135 @@
             </div>
         </div>
         <!-- FIN MODAL PEDIDO HGI -->
+
+
+        <!-- MODAL MANO DE OBRA -->
+        <div v-if="mostrarManoObra" class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);">
+
+            <div class="modal-dialog modal-lg modal-dialog-centered">
+                <div class="modal-content shadow-lg border-0">
+
+                    <!-- HEADER -->
+                    <div class="modal-header bg-dark text-white border-0">
+                        <h5 class="modal-title fw-semibold">
+                            <i class="fas fa-coins me-2"></i>
+                            Resumen Financiero OT
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white"
+                            @click="mostrarManoObra = false"></button>
+                    </div>
+
+                    <!-- BODY -->
+                    <div class="modal-body bg-light">
+
+                        <div class="table-responsive">
+                            <table class="table align-middle mb-0">
+
+                                <thead class="text-uppercase small text-muted border-bottom">
+                                    <tr>
+                                        <th>Tipo</th>
+                                        <th class="text-center">Horas</th>
+                                        <th class="text-end">Valor Hora</th>
+                                        <th class="text-end">Total</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+
+                                    <tr v-for="m in manoObra" :key="m.id_instalador" class="border-bottom">
+
+                                        <td class="fw-semibold text-dark">
+                                            @{{ m.tipo }}
+                                        </td>
+
+                                        <td class="text-center text-secondary">
+                                            @{{ Number(m.horas).toFixed(2) }}
+                                        </td>
+
+                                        <td class="text-end text-secondary">
+                                            $ @{{ Number(m.valor_hora).toLocaleString() }}
+                                        </td>
+
+                                        <td class="text-end fw-semibold text-dark">
+                                            $ @{{ Number(m.total).toLocaleString() }}
+                                        </td>
+
+                                    </tr>
+
+                                </tbody>
+
+                                <tfoot class="border-top">
+
+                                    <tr>
+                                        <td colspan="3" class="text-end fw-semibold text-muted">
+                                            TOTAL MANO DE OBRA
+                                        </td>
+                                        <td class="text-end fw-bold text-dark">
+                                            $ @{{ Number(manoObraTotal).toLocaleString() }}
+                                        </td>
+                                    </tr>
+
+                                    <tr>
+                                        <td colspan="3" class="text-end fw-semibold text-muted">
+                                            TOTAL MATERIAL
+                                        </td>
+                                        <td class="text-end fw-bold text-dark">
+                                            $ @{{ Number(materialTotal).toLocaleString() }}
+                                        </td>
+                                    </tr>
+
+                                    <tr>
+                                        <td colspan="3" class="text-end fw-semibold text-muted">
+                                            TOTAL PEDIDO
+                                        </td>
+                                        <td class="text-end fw-bold text-dark">
+                                            $ @{{ Number(pedidoTotal).toLocaleString() }}
+                                        </td>
+                                    </tr>
+
+                                    <tr class="border-top">
+                                        <td colspan="3" class="text-end fw-bold text-uppercase">
+                                            UTILIDAD
+                                        </td>
+
+                                        <td class="text-end fw-bold"
+                                            :class="utilidad >= 0 ? 'text-success' : 'text-danger'">
+
+                                            $ @{{ Number(utilidad).toLocaleString() }}
+
+                                        </td>
+                                    </tr>
+
+                                </tfoot>
+
+                            </table>
+                        </div>
+
+                    </div>
+
+                    <!-- FOOTER -->
+                    <div class="modal-footer bg-white border-0">
+
+                        <!-- Botón Exportar (solo admin) -->
+                        @if ($isAdmin || $isAdminInstalador)
+                            <button class="btn btn-outline-success"
+                                @click="exportarExcel(selectedWorkOrderId)">
+                                <i class="fas fa-file-excel me-2"></i>
+                                Exportar Excel
+                            </button>
+                        @endif
+
+
+                        <button class="btn btn-outline-dark" @click="mostrarManoObra = false">
+                            Cerrar
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- FIN MODAL MANO DE OBRA -->
 
 
 
@@ -419,6 +555,12 @@
                         selectedWorkOrderId: null,
                         pedidoHgi: [],
                         mostrarPedidoHgi: false,
+                        manoObra: [],
+                        mostrarManoObra: false,
+                        pedidoTotal: 0,
+                        manoObraTotal: 0,
+                        utilidad: 0,
+                        materialTotal: 0,
 
                     }
                 },
@@ -466,10 +608,58 @@
                             w.tercero.toLowerCase().includes(s) ||
                             w.vendedor.toLowerCase().includes(s)
                         );
+                    },
+
+                    pedidoHgiAgrupado() {
+
+                        const mapa = {};
+
+                        this.pedidoHgi.forEach(p => {
+
+                            const cantidad = parseFloat(p.cantidad) || 0;
+                            const subtotal = parseFloat(p.subtotal) || 0;
+                            const descuento = parseFloat(p.valor_descuento) || 0;
+                            const total = parseFloat(p.total_con_descuento) || 0;
+
+                            if (!mapa[p.codigo_producto]) {
+
+                                mapa[p.codigo_producto] = {
+                                    ...p,
+                                    cantidad,
+                                    subtotal,
+                                    valor_descuento: descuento,
+                                    total_con_descuento: total
+                                };
+
+                            } else {
+
+                                mapa[p.codigo_producto].cantidad += cantidad;
+                                mapa[p.codigo_producto].subtotal += subtotal;
+                                mapa[p.codigo_producto].valor_descuento += descuento;
+                                mapa[p.codigo_producto].total_con_descuento += total;
+
+                            }
+
+                        });
+
+                        return Object.values(mapa);
                     }
                 },
 
                 methods: {
+
+
+                    limpiarNumero(valor) {
+
+                        if (!valor) return 0;
+
+                        // Convertir a string
+                        let limpio = String(valor)
+                            .replace(/\./g, '') // quitar puntos de miles
+                            .replace(',', '.'); // cambiar coma decimal por punto
+
+                        return parseFloat(limpio) || 0;
+                    },
 
 
                     // Mostrar/ocultar fila según búsqueda
@@ -634,7 +824,46 @@
                     cerrarPedidoHgi() {
                         this.mostrarPedidoHgi = false;
                         this.pedidoHgi = [];
+                    },
+
+                    async verManoObra(id, pedido) {
+                        
+                        this.selectedWorkOrderId = id;
+
+                        const resp = await fetch(`/ordenes-trabajo/${id}/mano-obra?pedido=${pedido}`);
+
+                        if (!resp.ok ) {
+                            alert(data.error || "Ocurrió un error procesando la información.");
+                            return;
+                        }
+
+                        const data = await resp.json();
+
+                        this.manoObra = data.mano_obra;
+                        this.manoObraTotal = data.mano_obra_total;
+                        this.materialTotal = data.solicitud_total;
+                        this.pedidoTotal = data.pedido_total;
+                        this.utilidad = data.utilidad;
+
+                        this.mostrarManoObra = true;
+                        
+                       
+                    },
+
+
+                    exportarExcel(id) {
+
+                        if (!id) {
+                            alert('No se encontró la orden.');
+                            return;
+                        }
+
+                        window.open(
+                            `/ordenes-trabajo/${id}/exportar-financiero-excel`,
+                            '_blank'
+                        );
                     }
+
 
                 }
             }).mount("#app");

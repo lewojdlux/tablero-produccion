@@ -16,6 +16,7 @@ class InstaladorModel extends Model
         'celular_instalador',
         'email_instalador',
         'identificador_usuario',
+        'valor_hora',
         'status',
     ];
 

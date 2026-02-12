@@ -39,7 +39,7 @@ class EnsurePerfil
         return match ((int) $user->perfil_usuario_id) {
 
             // ADMIN y SUPER
-            1, 2 => route('orders.pending.list'),
+            1, 2, 6 => route('orders.pending.list'),
 
             // AUXILIAR (NO tienes ruta propia → usa la lista normal)
             3    => route('orders.pending.list'),

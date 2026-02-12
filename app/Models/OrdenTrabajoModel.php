@@ -12,6 +12,7 @@ class OrdenTrabajoModel extends Model
     public $timestamps = false;
     protected $fillable = [
         'orden_trabajo_id',
+        'acompanante_ot',
         'fecha',
         'hora_inicio',
         'hora_fin',
@@ -27,6 +28,7 @@ class OrdenTrabajoModel extends Model
         'fecha' => 'date',
         'hora_inicio' => 'string',
         'hora_fin' => 'string',
+        'acompanante_ot' => 'array',
     ];
 
     public function ordenTrabajo()
@@ -44,6 +46,7 @@ class OrdenTrabajoModel extends Model
             'hora_fin' => $data['hora_fin'],
             'horas_trabajadas' => $data['horas_trabajadas'],
             'observaciones' => $data['observaciones'] ?? null,
+            'acompanante_ot' => $data['acompanante_ot'],
             'fechareg_otj' => now(),
             'user_otj' => $data['user_otj'],
         ]);

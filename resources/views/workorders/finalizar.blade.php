@@ -1,120 +1,183 @@
 @extends('layouts.app')
 
 @section('content')
-    <style>
-        [v-cloak] {
-            display: none;
-        }
-    </style>
+<style>
+    [v-cloak] { display: none; }
+</style>
 
-    <div class="container-fluid">
-        <div class="row justify-content-center">
-            <div class="col-12 col-lg-11 col-xl-10">
+<div class="container-fluid py-4">
+    <div class="row justify-content-center">
+        <div class="col-12 col-xxl-10">
 
-                <div class="bg-white p-4 rounded shadow">
+            <div class="card shadow-lg border-0">
+                <div class="card-body p-5">
 
-                    <h3 class="mb-3">
+                    <h3 class="mb-3 fw-bold">
                         Finalizar Orden de Trabajo #{{ $ordenTrabajo->n_documento }}
                     </h3>
 
-                    <div class="mb-4 text-sm">
+                    <div class="mb-4">
                         <p><strong>Cliente:</strong> {{ $ordenTrabajo->tercero }}</p>
                         <p><strong>Pedido de venta:</strong> {{ $ordenTrabajo->pedido ?? '—' }}</p>
-                        <p><strong>Instalador:</strong> {{ optional($ordenTrabajo->instalador)->nombre_instalador }}</p>
+                        <p><strong>Instalador principal:</strong> {{ optional($ordenTrabajo->instalador)->nombre_instalador }}</p>
                     </div>
 
+                    <div id="finalizarOT"
+                         v-cloak
+                         data-orden-id="{{ $ordenTrabajo->id_work_order }}"
+                         data-csrf="{{ csrf_token() }}"
+                         data-post-url="{{ route('workorders.otjornada', $ordenTrabajo->id_work_order) }}"
+                         data-get-url="{{ route('workorders.jornadas', $ordenTrabajo->id_work_order) }}"
+                         data-finalizar-url="{{ route('workorders.finalizar', $ordenTrabajo->id_work_order) }}"
+                         data-instaladores='@json($instaladores)'>
 
-
-                    {{-- VUE APP --}}
-                    <div id="finalizarOT" v-cloak data-orden-id="{{ $ordenTrabajo->id_work_order }}"
-                        data-csrf="{{ csrf_token() }}"
-                        data-post-url="{{ route('workorders.otjornada', $ordenTrabajo->id_work_order) }}"
-                        data-get-url="{{ route('workorders.jornadas', $ordenTrabajo->id_work_order) }}"
-                        data-finalizar-url="{{ route('workorders.finalizar', $ordenTrabajo->id_work_order) }}">
-
+                        {{-- ALERTAS --}}
                         <div v-if="alert.show"
-                            class="mb-3 p-3 rounded"
-                            :class="{
-                                'bg-green-100 text-green-800 border border-green-300': alert.type === 'success',
-                                'bg-red-100 text-red-800 border border-red-300': alert.type === 'error',
-                                'bg-yellow-100 text-yellow-800 border border-yellow-300': alert.type === 'warning'
-                            }">
+                             class="alert"
+                             :class="{
+                                'alert-success': alert.type === 'success',
+                                'alert-danger': alert.type === 'error',
+                                'alert-warning': alert.type === 'warning'
+                             }">
                             @{{ alert.message }}
                         </div>
 
+                        {{-- JORNADAS REGISTRADAS --}}
+                        <div v-if="jornadasRegistradas.length" class="mb-5">
+                            <h5 class="fw-bold mb-3">Jornadas registradas</h5>
 
-                        {{-- ================= JORNADAS REGISTRADAS ================= --}}
-                        <div v-if="jornadasRegistradas.length" class="mb-4">
-                            <h5 class="mb-2">📅 Jornadas registradas</h5>
-
-                            <table class="table table-sm table-bordered">
-                                <thead class="table-light">
-                                    <tr>
-                                        <th>Fecha</th>
-                                        <th>Hora inicio</th>
-                                        <th>Hora fin</th>
-                                        <th>Horas</th>
-                                        <th>Observaciones</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr v-for="(j, i) in jornadasRegistradas" :key="i">
-                                        <td>@{{ j.fecha }}</td>
-                                        <td>@{{ j.hora_inicio }}</td>
-                                        <td>@{{ j.hora_fin }}</td>
-                                        <td>@{{ j.horas_trabajadas }}</td>
-                                        <td>@{{ j.observaciones }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-hover">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Fecha</th>
+                                            <th>Hora inicio</th>
+                                            <th>Hora fin</th>
+                                            <th>Horas</th>
+                                            <th>Observaciones</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="(j, i) in jornadasRegistradas" :key="i">
+                                            <td>@{{ j.fecha }}</td>
+                                            <td>@{{ j.hora_inicio }}</td>
+                                            <td>@{{ j.hora_fin }}</td>
+                                            <td class="fw-bold">@{{ j.horas_trabajadas }}</td>
+                                            <td>@{{ j.observaciones }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
                         </div>
 
-                        {{-- ================= NUEVA JORNADA ================= --}}
+                        {{-- FORM NUEVA JORNADA --}}
                         <form @submit.prevent="submit" v-if="!otFinalizada">
 
-                            <h5 class="mb-3">➕ Registrar nueva jornada</h5>
+                            <h5 class="fw-bold mb-4">Registrar nueva jornada</h5>
 
-                            <div v-for="(j, index) in jornadas" :key="index"
-                                class="border rounded p-3 mb-3 bg-light">
+                            <div v-for="(j, index) in jornadas"
+                                 :key="index"
+                                 class="card shadow-sm mb-4">
 
-                                <div class="row g-2 mb-2">
-                                    <div class="col-md-4">
-                                        <label>Fecha</label>
-                                        <input type="date" class="form-control" v-model="j.fecha" required>
-                                    </div>
+                                <div class="card-body">
 
-                                    <div class="col-md-3">
-                                        <label>Hora inicio</label>
-                                        <input type="time" class="form-control" v-model="j.hora_inicio" required>
-                                    </div>
+                                    <div class="d-flex justify-content-between align-items-center mb-3">
+                                        <h6 class="fw-bold text-primary mb-0">
+                                            Jornada #@{{ index + 1 }}
+                                        </h6>
 
-                                    <div class="col-md-3">
-                                        <label>Hora fin</label>
-                                        <input type="time" class="form-control" v-model="j.hora_fin" required>
-                                    </div>
-
-                                    <div class="col-md-2 d-flex align-items-end">
-                                        <button v-if="jornadas.length > 1" type="button" class="btn btn-danger btn-sm"
-                                            @click="removeJornada(index)">
+                                        <button v-if="jornadas.length > 1"
+                                                type="button"
+                                                class="btn btn-outline-danger btn-sm"
+                                                @click="removeJornada(index)">
                                             Quitar
                                         </button>
                                     </div>
+
+                                    <div class="row g-4">
+
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-semibold">Fecha</label>
+                                            <input type="date"
+                                                   class="form-control"
+                                                   v-model="j.fecha"
+                                                   required>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-semibold">Hora inicio</label>
+                                            <input type="time"
+                                                   class="form-control"
+                                                   v-model="j.hora_inicio"
+                                                   required>
+                                        </div>
+
+                                        <div class="col-md-4">
+                                            <label class="form-label fw-semibold">Hora fin</label>
+                                            <input type="time"
+                                                   class="form-control"
+                                                   v-model="j.hora_fin"
+                                                   required>
+                                        </div>
+
+                                        {{-- INSTALADORES COMO CHECKBOXES --}}
+                                        <div class="col-12">
+                                            <label class="form-label fw-semibold">
+                                                Instaladores participantes
+                                            </label>
+
+                                            <div class="row">
+                                                <div class="col-md-4 mb-3"
+                                                     v-for="inst in instaladores"
+                                                     :key="inst.id_instalador">
+
+                                                    <div class="border rounded p-3 shadow-sm bg-light">
+
+                                                        <div class="form-check">
+                                                            <input class="form-check-input"
+                                                                   type="checkbox"
+                                                                   :value="inst.id_instalador"
+                                                                   v-model="j.instaladores"
+                                                                   :id="'inst_' + inst.id_instalador">
+
+                                                            <label class="form-check-label fw-medium"
+                                                                   :for="'inst_' + inst.id_instalador">
+                                                                @{{ inst.nombre_instalador }}
+                                                            </label>
+                                                        </div>
+
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div class="col-12">
+                                            <label class="form-label fw-semibold">Observaciones</label>
+                                            <textarea class="form-control"
+                                                      rows="3"
+                                                      v-model="j.observaciones"
+                                                      placeholder="Detalle del trabajo realizado"></textarea>
+                                        </div>
+
+                                    </div>
+
                                 </div>
-
-                                <textarea class="form-control" rows="2" v-model="j.observaciones" placeholder="Observaciones (opcional)">
-                            </textarea>
                             </div>
 
-
-
+                            {{-- DESCRIPCIÓN GENERAL --}}
                             <div class="mb-4">
-                                <label>Descripción general / Novedades</label>
-                                <textarea class="form-control" rows="4" v-model="installationNotes" >
-                            </textarea>
+                                <label class="form-label fw-semibold">
+                                    Descripción general / Novedades
+                                </label>
+                                <textarea class="form-control"
+                                          rows="4"
+                                          v-model="installationNotes"></textarea>
                             </div>
 
-                            <div class="d-flex justify-content-end gap-2">
-                                <a href="{{ route('ordenes.trabajo.asignados') }}" class="btn btn-secondary">
+                            {{-- BOTONES --}}
+                            <div class="d-flex justify-content-end gap-3">
+                                <a href="{{ route('ordenes.trabajo.asignados') }}"
+                                   class="btn btn-outline-secondary">
                                     Cancelar
                                 </a>
 
@@ -122,25 +185,28 @@
                                     Guardar jornada
                                 </button>
 
-                                <button type="button" class="btn btn-danger" @click="finalizarOT">
+                                <button type="button"
+                                        class="btn btn-danger"
+                                        @click="finalizarOT">
                                     Finalizar OT
                                 </button>
-
-
                             </div>
 
                         </form>
-                        <div v-else class="alert alert-success">
-                            Esta orden de trabajo ya fue finalizada.
-                            No se pueden registrar más jornadas.
-                        </div>
-                    </div>
 
+                        <div v-else class="alert alert-success mt-4">
+                            Esta orden de trabajo ya fue finalizada.
+                        </div>
+
+                    </div>
                 </div>
             </div>
+
         </div>
     </div>
+</div>
 @endsection
+
 
 @push('scripts')
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
@@ -175,11 +241,14 @@
                     fecha: '',
                     hora_inicio: '',
                     hora_fin: '',
-                    observaciones: ''
+                    observaciones: '',
+                    instaladores: []
                 }]);
 
                 const installationNotes = ref('');
                 const otFinalizada = ref(false);
+                const instaladores = ref(JSON.parse(el.dataset.instaladores));
+
 
                 async function cargarJornadas() {
                     const res = await axios.get(getUrl);
@@ -189,9 +258,13 @@
                 async function submit() {
                     try {
                         const res = await axios.post(
-                            postUrl,
-                            { jornadas: jornadas.value },
-                            { headers: { 'X-CSRF-TOKEN': csrfToken } }
+                            postUrl, {
+                                jornadas: jornadas.value
+                            }, {
+                                headers: {
+                                    'X-CSRF-TOKEN': csrfToken
+                                }
+                            }
                         );
 
                         await cargarJornadas();
@@ -200,7 +273,8 @@
                             fecha: '',
                             hora_inicio: '',
                             hora_fin: '',
-                            observaciones: ''
+                            observaciones: '',
+                            instaladores: []
                         }];
 
                         alert.value = {
@@ -232,9 +306,13 @@
 
                     try {
                         const res = await axios.post(
-                            finalizarUrl,
-                            { installation_notes: installationNotes.value },
-                            { headers: { 'X-CSRF-TOKEN': csrfToken } }
+                            finalizarUrl, {
+                                installation_notes: installationNotes.value
+                            }, {
+                                headers: {
+                                    'X-CSRF-TOKEN': csrfToken
+                                }
+                            }
                         );
 
                         alert.value = {
@@ -267,6 +345,7 @@
                     installationNotes,
                     otFinalizada,
                     alert,
+                    instaladores,
                     submit,
                     finalizarOT
                 };

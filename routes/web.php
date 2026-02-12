@@ -40,7 +40,7 @@ Route::post('/logout', function (Request $request) {
  * ADMIN / SUPER (perfiles 1,2)
  * Prefijo y alias: admin.*
  */
-Route::middleware(['auth', 'perfil:1,2,5'])
+Route::middleware(['auth', 'perfil:1,2,5,6'])
     ->group(function () {
 
 
@@ -118,6 +118,12 @@ Route::middleware(['auth', 'perfil:1,2,5'])
 
         // Ver orden de trabajo finalizada
         Route::get('/ordenes-trabajo/instalador/finalizada/{id}', [OrdenesTrabajoController::class, 'verOrdenFinalizada'])->name('workorders.finalizadas.show');
+
+
+        // Ver mano de obra de una orden de trabajo
+        Route::get('/ordenes-trabajo/{id}/mano-obra',[OrdenesTrabajoController::class, 'manoDeObra'])->name('workorders.mano_obra');
+
+        Route::get('/ordenes-trabajo/{id}/exportar-financiero-excel',[OrdenesTrabajoController::class,'exportarFinancieroExcel'])->name('workorders.export.financiero.excel');
 
 
 

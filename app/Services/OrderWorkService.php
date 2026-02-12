@@ -112,6 +112,7 @@ class OrderWorkService
 
                 $this->orderWorkRepository->crearJornada([
                     'orden_trabajo_id' => $ordenTrabajoId,
+                    'acompanante_ot' => isset($jornada['instaladores']) && count($jornada['instaladores']) ? json_encode($jornada['instaladores']) : null,
                     'fecha' => $jornada['fecha'],
                     'hora_inicio' => $jornada['hora_inicio'],
                     'hora_fin' => $jornada['hora_fin'],
