@@ -111,152 +111,153 @@
 
         {{-- Tabla --}}
         <div class="overflow-x-auto rounded-lg border border-zinc-200">
-            <table class="w-full text-xs leading-tight">
-                <thead>
-                    <th class="px-2 py-1 font-medium">Consecutivo</th>
-                    <th class="px-2 py-1 font-medium">Instalador</th>
-                    <th class="px-2 py-1 font-medium">Cliente</th>
-                    <th class="px-2 py-1 font-medium">Asesor</th>
-                    <th class="px-2 py-1 font-medium text-center">Acciones</th>
-                </thead>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs leading-tight">
+                    <thead>
+                        <th class="px-2 py-1 font-medium">Consecutivo</th>
+                        <th class="px-2 py-1 font-medium">Instalador</th>
+                        <th class="px-2 py-1 font-medium">Cliente</th>
+                        <th class="px-2 py-1 font-medium">Asesor</th>
+                        <th class="px-2 py-1 font-medium text-center">Estado</th>
+                        <th class="px-2 py-1 font-medium text-center">Acciones</th>
+                    </thead>
 
-                <tbody>
-                    <tr v-for="workOrder in filteredWorkOrders" :key="workOrder.id_work_order"
-                        class="border-b border-zinc-200 hover:bg-zinc-50">
+                    <tbody>
+                        <tr v-for="workOrder in filteredWorkOrders" :key="workOrder.id_work_order"
+                            class="border-b border-zinc-200 hover:bg-zinc-50">
 
-                        <td class="px-2 py-1">@{{ workOrder.n_documento }}</td>
+                            <td class="px-2 py-1">@{{ workOrder.n_documento }}</td>
 
-                        <td class="px-2 py-1">
-                            @{{ workOrder.instalador ? workOrder.instalador.nombre_instalador : '' }}
-                        </td>
+                            <td class="px-2 py-1">
+                                @{{ workOrder.instalador ? workOrder.instalador.nombre_instalador : '' }}
+                            </td>
 
-                        <td class="px-2 py-1">@{{ workOrder.tercero }}</td>
+                            <td class="px-2 py-1">@{{ workOrder.tercero }}</td>
 
-                        <td class="px-2 py-1">@{{ workOrder.vendedor }}</td>
+                            <td class="px-2 py-1">@{{ workOrder.vendedor }}</td>
 
-                        <td class="px-2 py-1 text-center">
-                            <div class="d-flex justify-content-center flex-wrap gap-2">
+                            <td class="px-2 py-1 text-center">
+                                <span v-if="workOrder.status === 'completed'" class="btn-sm btn  btn-success">
+                                    Finalizada
+                                </span>
 
-                                {{-- ================= ADMIN ================= --}}
-                                @if ($isAdmin || $isAdminInstalador)
-                                    <!-- OT FINALIZADA -->
-                                    <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
-                                        title="Ver orden finalizada" @click="verOTFinalizada(workOrder.id_work_order)">
-                                        <i class="fas fa-check-circle me-1"></i>
-                                        OT Finalizada
+                                <span v-else-if="workOrder.status === 'in_progress'" class="btn-sm btn  btn-warning text-dark">
+                                    En Progreso
+                                </span>
+
+                                <span v-else-if="workOrder.status === 'pending'" class="btn-sm btn  btn-danger">
+                                    Pendiente
+                                </span>
+
+                                <span v-else class="badge bg-secondary">
+                                    @{{ workOrder.status }}
+                                </span>
+                            </td>
+
+
+                            <td class="text-center align-middle">
+                                <div class="dropdown" ata-bs-auto-close="outside">
+
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle px-3" type="button"
+                                        data-bs-toggle="dropdown" aria-expanded="false" data-bs-display="static">
+                                        <i class="fas fa-ellipsis-h me-1"></i>
+                                        Acciones
                                     </button>
 
-                                    <!-- 👇 MANO DE OBRA SOLO SI ESTÁ COMPLETADA -->
-                                    <button v-if="workOrder.status === 'completed'" class="btn btn-info btn-sm"
-                                        title="Ver mano de obra"
-                                        @click="verManoObra(workOrder.id_work_order, workOrder.pedido)">
-                                        <i class="fas fa-money-bill-wave me-1"></i>
-                                        Mano de Obra
-                                    </button>
+                                    <ul class="dropdown-menu shadow-sm">
 
-                                    <!-- OT EN PROGRESO -->
-                                    <span v-else-if="workOrder.status === 'in_progress'"
-                                        class="btn btn-success btn-sm disabled cursor-default">
-                                        <i class="fas fa-spinner me-1"></i>
-                                        OT Iniciada
-                                    </span>
+                                        {{-- ================= INSTALADOR ================= --}}
+                                        @if ($isInstalador)
+                                            <template v-if="workOrder.status === 'in_progress'">
+                                                <li>
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="irAsignarMaterial(workOrder.id_work_order)">
+                                                        <i class="fas fa-tools me-2 text-warning"></i>
+                                                        Asignar material
+                                                    </a>
+                                                </li>
 
-                                    <!-- SOLICITUD MATERIAL PENDIENTE -->
-                                    <button
-                                        v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'queued'"
-                                        class="btn btn-primary btn-sm" title="Cargar solicitud de material"
-                                        @click="irCargarSolicitud(workOrder.id_work_order)">
-                                        <i class="fas fa-file-excel me-1"></i>
-                                        Cargar solicitud
-                                    </button>
+                                                <li>
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="irFinalizarOT(workOrder.id_work_order)">
+                                                        <i class="fas fa-check me-2 text-success"></i>
+                                                        Finalizar OT
+                                                    </a>
+                                                </li>
+                                            </template>
 
-                                    <!-- SOLICITUD MATERIAL APROBADA -->
-                                    <button
-                                        v-if="workOrder.pedidos_materiales_count > 0 && workOrder.pedidos_materiales[0].status === 'approved'"
-                                        class="btn btn-outline-success btn-sm" title="Ver solicitud aprobada"
-                                        @click="verSolicitud(workOrder.pedidos_materiales[0].id_pedido_material)">
-                                        <i class="fas fa-eye me-1"></i>
-                                        Ver solicitud
-                                    </button>
-                                @elseif ($isAsesor)
-                                    {{-- ================= ASESOR ================= --}}
-                                    <!-- OT FINALIZADA -->
-                                    <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
-                                        title="Ver orden de trabajo finalizada"
-                                        @click="verOTFinalizada(workOrder.id_work_order)">
-                                        <i class="fas fa-check-circle me-1"></i>
-                                        OT Finalizada
-                                    </button>
+                                            <template v-else-if="workOrder.status === 'pending'">
+                                                <li>
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="iniciarOT(workOrder.id_work_order)">
+                                                        <i class="fas fa-play me-2 text-danger"></i>
+                                                        Iniciar OT
+                                                    </a>
+                                                </li>
+                                            </template>
 
-                                    <!-- OT EN PROGRESO -->
-                                    <span v-else-if="workOrder.status === 'in_progress'"
-                                        class="btn btn-success btn-sm disabled cursor-default">
-                                        <i class="fas fa-spinner me-1"></i>
-                                        OT Iniciada
-                                    </span>
+                                            <li>
+                                                <a class="dropdown-item" href="#"
+                                                    @click.prevent="verPedidoMaterialHgi(workOrder.pedido)">
+                                                    <i class="fas fa-file-alt me-2 text-warning"></i>
+                                                    Ver Pedido
+                                                </a>
+                                            </li>
+                                        @endif
 
-                                    {{-- ================= INSTALADOR ================= --}}
-                                @elseif ($isInstalador)
-                                    {{-- ================= INSTALADOR ================= --}}
-                                    <div class="d-flex justify-content-center flex-wrap gap-2">
 
-                                        <!-- OT FINALIZADA -->
-                                        <button v-if="workOrder.status === 'completed'" class="btn btn-success btn-sm"
-                                            title="Ver orden de trabajo finalizada"
-                                            @click="verOTFinalizada(workOrder.id_work_order)">
-                                            <i class="fas fa-check-circle me-1"></i>
-                                            Ver OT
-                                        </button>
+                                        {{-- ================= ADMIN ================= --}}
+                                        @if ($isAdmin || $isAdminInstalador)
+                                            <template v-if="workOrder.status === 'completed'">
 
-                                        <!-- OT EN EJECUCIÓN -->
-                                        <template v-else-if="workOrder.status === 'in_progress'">
+                                                <li>
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="verOTFinalizada(workOrder.id_work_order)">
+                                                        <i class="fas fa-check-circle me-2 text-success"></i>
+                                                        Ver OT Finalizada
+                                                    </a>
+                                                </li>
 
-                                            <button class="btn btn-warning btn-sm text-dark" title="Asignar material"
-                                                @click="irAsignarMaterial(workOrder.id_work_order)">
-                                                <i class="fas fa-tools me-1"></i>
-                                                Material
-                                            </button>
+                                                <li>
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="verManoObra(workOrder.id_work_order, workOrder.pedido)">
+                                                        <i class="fas fa-coins me-2 text-info"></i>
+                                                        Ver Financiero
+                                                    </a>
+                                                </li>
 
-                                            <button class="btn btn-success btn-sm" title="Finalizar orden de trabajo"
-                                                @click="irFinalizarOT(workOrder.id_work_order)">
-                                                <i class="fas fa-check me-1"></i>
-                                                Finalizar OT
-                                            </button>
+                                            </template>
+                                        @endif
 
-                                        </template>
 
-                                        <!-- OT PENDIENTE -->
-                                        <template v-else-if="workOrder.status === 'pending'">
+                                        {{-- ================= ASESOR ================= --}}
+                                        @if ($isAsesor)
+                                            <template v-if="workOrder.status === 'completed'">
+                                                <li>
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="verManoObra(workOrder.id_work_order, workOrder.pedido)">
+                                                        <i class="fas fa-eye me-2 text-success"></i>
+                                                        Ver OT
+                                                    </a>
+                                                </li>
+                                            </template>
+                                        @endif
 
-                                            <button class="btn btn-danger btn-sm" title="Iniciar orden de trabajo"
-                                                @click="iniciarOT(workOrder.id_work_order)">
-                                                <i class="fas fa-play me-1"></i>
-                                                Iniciar
-                                            </button>
+                                    </ul>
+                                </div>
+                            </td>
 
-                                        </template>
 
-                                        <button class="btn btn-warning btn-sm text-dark" title="Ver pedido de material"
-                                            @click="verPedidoMaterialHgi(workOrder.pedido)">
-                                            <i class="fas fa-file-alt me-1"></i>
-                                            Ver PD
-                                        </button>
+                        </tr>
 
-                                    </div>
-                                @endif
-
-                            </div>
-                        </td>
-
-                    </tr>
-
-                    <tr v-if="filteredWorkOrders.length === 0">
-                        <td colspan="7" class="px-2 py-6 text-center text-zinc-500">
-                            Sin resultados…
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
+                        <tr v-if="filteredWorkOrders.length === 0">
+                            <td colspan="7" class="px-2 py-6 text-center text-zinc-500">
+                                Sin resultados…
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <div class="pt-2 text-xs">
@@ -490,8 +491,7 @@
 
                         <!-- Botón Exportar (solo admin) -->
                         @if ($isAdmin || $isAdminInstalador)
-                            <button class="btn btn-outline-success"
-                                @click="exportarExcel(selectedWorkOrderId)">
+                            <button class="btn btn-outline-success" @click="exportarExcel(selectedWorkOrderId)">
                                 <i class="fas fa-file-excel me-2"></i>
                                 Exportar Excel
                             </button>
@@ -521,6 +521,7 @@
 @push('scripts')
     <script src="https://js.pusher.com/7.2/pusher.min.js"></script>
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
 
 
 
@@ -827,12 +828,12 @@
                     },
 
                     async verManoObra(id, pedido) {
-                        
+
                         this.selectedWorkOrderId = id;
 
                         const resp = await fetch(`/ordenes-trabajo/${id}/mano-obra?pedido=${pedido}`);
 
-                        if (!resp.ok ) {
+                        if (!resp.ok) {
                             alert(data.error || "Ocurrió un error procesando la información.");
                             return;
                         }
@@ -846,8 +847,8 @@
                         this.utilidad = data.utilidad;
 
                         this.mostrarManoObra = true;
-                        
-                       
+
+
                     },
 
 

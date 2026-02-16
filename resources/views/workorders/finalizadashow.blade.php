@@ -157,7 +157,7 @@
     
 
     <div class="flex justify-end gap-2">
-        <a href="{{ route('orders.pending.list') }}" class="btn btn-secondary">
+        <a href="{{ route('ordenes.trabajo.asignadas') }}" class="btn btn-secondary">
             Volver
         </a>
     </div>
