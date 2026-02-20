@@ -134,9 +134,10 @@
         @if ($isAdmin  || $isAdminInstalador )
 
             {{-- Órdenes de trabajo --}}
-            @php $otActive = request()->routeIs('pedidos.materiales.*'); @endphp
+            @php $otActive = request()->routeIs('pedidos.materiales.*'); 
+            @endphp
 
-            <button type="button"
+            <!--<button type="button"
                     onclick="toggleMenu('menu-solicitudes')"
                     class="w-full flex justify-between rounded-lg
                     {{ $otActive ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
@@ -152,7 +153,7 @@
                 class="block rounded-md
                 {{ request()->routeIs('solicitudes.index') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
                     Realizadas
-                </a>
+                </a>-->
             </div>
 
         @endif
