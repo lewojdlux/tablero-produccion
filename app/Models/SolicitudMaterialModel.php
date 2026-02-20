@@ -16,10 +16,8 @@ class SolicitudMaterialModel extends Model
     protected $fillable = [
         'n_solicitud',
         'pedido_material_id',
-        'instalador_id',
-        'proveedor_id',
+        'consecutivo_compra',
         'status',
-        'observaciones',
         'ref_id_usuario_registro',
         'fecha_registro',
         'ref_id_usuario_modificacion',
@@ -31,21 +29,16 @@ class SolicitudMaterialModel extends Model
         return $this->belongsTo(PedidoMaterialModel::class, 'pedido_material_id', 'id_pedido_material');
     }
 
-    public function instalador()
+    public function usuarioRegistro()
     {
-        return $this->belongsTo(InstaladorModel::class, 'instalador_id', 'id_instalador');
+        return $this->belongsTo(User::class, 'ref_id_usuario_registro');
     }
 
-
-    public function proveedor()
+    public function usuarioModificacion()
     {
-        return $this->belongsTo(ProveedorModel::class, 'proveedor_id', 'id_proveedor');
+        return $this->belongsTo(User::class, 'ref_id_usuario_modificacion');
     }
 
-    public function materialesProveedor()
-    {
-        return $this->hasMany(\App\Models\DetalleMaterialProveedor::class, 'solicitud_material_id', 'id_solicitud_material');
-    }
 
 
     public function detalles()

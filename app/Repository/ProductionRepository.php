@@ -711,17 +711,17 @@ class ProductionRepository
             ->where('t.IntEstado', 0)
             ->selectRaw(
                 "
-            t.DatFecha as FechaFicha,
-            t.IntDocumento as FichaDocumento,
-            t.IntPedido as PedidoAsociadoFicha,
-            tc.StrNombre as ClienteFicha,
-            tv.StrNombre as VendedorFicha,
-            p.IntDocumento as EnsambleDocumento,
-            p.IntPedido as EnsamblePedido,
-            ptc.StrNombre as ClienteEnsamble,
-            ptv.StrNombre as VendedorEnsamble,
-            p.DatFecha as FechaEnsamble
-        ",
+                    t.DatFecha as FechaFicha,
+                    t.IntDocumento as FichaDocumento,
+                    t.IntPedido as PedidoAsociadoFicha,
+                    tc.StrNombre as ClienteFicha,
+                    tv.StrNombre as VendedorFicha,
+                    p.IntDocumento as EnsambleDocumento,
+                    p.IntPedido as EnsamblePedido,
+                    ptc.StrNombre as ClienteEnsamble,
+                    ptv.StrNombre as VendedorEnsamble,
+                    p.DatFecha as FechaEnsamble
+                ",
             )
             ->first();
 
@@ -776,7 +776,7 @@ class ProductionRepository
             ->join('TblTerceros as tc', 't.StrTercero', '=', 'tc.StrIdTercero')
             ->join('TblVendedores as tv', 't.StrDVendedor', '=', 'tv.StrIdVendedor')
 
-            // ✅ UNA factura por pedido
+            //  UNA factura por pedido
             ->leftJoin(
                 \DB::raw("
                 (
@@ -793,18 +793,18 @@ class ProductionRepository
                 't.IntDocumento',
             )
 
-            // 🔴 Excluir ya asignados
+            //Excluir ya asignados
             ->when(!empty($documentosAsignados), function ($q) use ($documentosAsignados) {
                 $q->whereNotIn('t.IntDocumento', $documentosAsignados);
             })
 
 
-            // 🔒 FILTRO AUTOMÁTICO POR ASESOR LOGUEADO
+            // FILTRO AUTOMÁTICO POR ASESOR LOGUEADO
             ->when($vendedor, function ($q) use ($vendedor) {
                 $q->where('tv.StrIdVendedor', $vendedor);
             })
 
-            // 🔍 Búsqueda
+            // Búsqueda
             ->when($search, function ($q) use ($search) {
                 $q->where(function ($sub) use ($search) {
                     $sub->where('t.IntDocumento', 'like', "%{$search}%")
@@ -817,17 +817,26 @@ class ProductionRepository
             ->where('t.IntEstado', 0)
 
 
-            // 🔎 Solo pedidos que tengan aplicado servicio de instalación
-            ->whereExists(function ($q) {
+            //  Solo pedidos que tengan aplicado servicio de instalación
+            /*->whereExists(function ($q) {
                 $q->select(DB::raw(1))
                 ->from('TblDetalleDocumentos as dd')
                 ->join('TblProductos as pp', 'pp.StrIdProducto', '=', 'dd.StrProducto')
                 ->whereColumn('dd.IntDocumento', 't.IntDocumento')
                 ->where('pp.StrLinea', '40');
+            })*/
+
+            ->whereNotExists(function ($q) {
+                $q->select(DB::raw(1))
+                    ->from('TblDetalleDocumentos as dd')
+                    ->join('TblProductos as pp', 'pp.StrIdProducto', '=', 'dd.StrProducto')
+                    ->whereColumn('dd.IntDocumento', 't.IntDocumento')
+                    ->where('pp.StrLinea', '40');
             })
 
             ->select([
                 't.IntDocumento as n_documento',
+                't.StrTercero as tercero_id',
                 'tc.StrNombre as tercero',
                 'tv.StrNombre as vendedor',
                 'tv.StrIdVendedor as vendedor_username',
@@ -847,9 +856,9 @@ class ProductionRepository
             ->orderByDesc('t.IntPeriodo')
             ->orderByDesc('t.IntDocumento');
 
-        // ✅ AQUÍ ESTABA EL PROBLEMA
-        return $search
-            ? $query->get() // 🔍 sin paginar
-            : $query->paginate(50); // 📄 paginado
+        // AQUÍ ESTABA EL PROBLEMA
+        //return $search ? $query->get() : $query->paginate(50); //  paginado
+        return $query->paginate(50)->withQueryString();
+            
     }
 }

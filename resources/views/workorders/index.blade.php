@@ -11,9 +11,6 @@
         {{-- Header --}}
         <div class="flex items-center justify-between">
             <h2 class="text-lg font-semibold">Orden de trabajo</h2>
-
-
-
         </div>
 
 
@@ -21,7 +18,7 @@
         <details class="rounded border border-zinc-200 bg-zinc-50 p-2 pb-3 mb-3" open>
             <summary class="cursor-pointer text-[11px] text-zinc-700 select-none leading-none">Filtros</summary>
             <div class="mt-1.5 flex flex-wrap items-center gap-1 ">
-                <input type="text" placeholder="Buscar por documento, cliente o asesor" v-model="search"
+                <input type="text" placeholder="Buscar por documento, cliente o asesor" v-model="search" @input="buscarDebounce"
                     class="h-8 w-[26rem] max-w-full rounded border border-zinc-300 px-2 text-[11px]
                     focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500" />
 
@@ -54,7 +51,7 @@
                 </thead>
 
                 <tbody class="[&>tr:nth-child(odd)]:bg-white [&>tr:nth-child(even)]:bg-zinc-50">
-                    <tr v-for="(workOrder, index) in filteredOrders"
+                    <tr v-for="(workOrder, index) in orders"
                         :key="workOrder.n_documento"
                         class="border-b border-zinc-200 hover:bg-zinc-50">
 
@@ -78,7 +75,7 @@
                         </td>
                     </tr>
 
-                    <tr v-if="filteredOrders.length === 0">
+                    <tr v-if="orders.length === 0">
                         <td colspan="7" class="px-2 py-6 text-center text-zinc-500">
                             Sin resultados…
                         </td>
@@ -111,16 +108,27 @@
                 <input type="hidden" name="form.estado" v-model="form.estado">
 
 
-                <label class="text-xs font-semibold">Instalador</label>
-                <select v-model="form.instalador_id" class="w-full border rounded px-2 py-1 text-xs">
-                    <option value="">Seleccione…</option>
+                <label class="text-xs font-semibold">PD Servicio (Línea 40)</label>
+                <input 
+                    type="text"
+                    v-model="pdSearch"
+                    @input="buscarPDServicio"
+                    placeholder="Buscar PD servicio..."
+                    class="w-full border rounded px-2 py-1 text-xs"
+                />
 
-                    @foreach ($instaladores as $inst)
-                        <option value="{{ $inst->id_instalador }}">
-                            {{ $inst->nombre_instalador }}
-                        </option>
-                    @endforeach
-                </select>
+                <div v-if="pdResults.length" class="border rounded mt-1 max-h-40 overflow-y-auto text-xs">
+                    <div 
+                        v-for="pd in pdResults"
+                        :key="pd.IntDocumento"
+                        @click="seleccionarPD(pd)"
+                        class="px-2 py-1 hover:bg-gray-100 cursor-pointer"
+                    >
+                        @{{ pd.IntDocumento }} - @{{ pd.Descripcion }}
+                    </div>
+                </div>
+
+                <input type="hidden" v-model="form.pd_servicio">
 
                 <label class="text-xs font-semibold">Observación</label>
                 <textarea v-model="form.obsv_pedido" class="w-full border rounded px-2 py-1 text-xs" rows="2"></textarea>
@@ -161,11 +169,16 @@
 
             createApp({
                 data() {
+
+                    const params = new URLSearchParams(window.location.search);
                     return {
                         orders: window.WORKORDERS,
                         mostrarForm: false,
                         modal: false,
-                        search: "",
+                        search: params.get('search') ?? "",
+                        pdSearch: "",
+                        pdResults: [],
+                        searchTimeout: null,
                         form: {
                             n_documento: "",
                             tercero: "",
@@ -175,7 +188,7 @@
                             ano: "",
                             obsv_pedido: "",
                             n_factura: "",
-                            instalador_id: "",
+                             pd_servicio: "",
                             status: "pending",
                             estado: '',
                             description: ""
@@ -183,30 +196,44 @@
                     };
                 },
                 computed: {
-                    filteredOrders() {
-                        if (!this.search) {
-                            return this.orders;
-                        }
-
-                        const term = this.search.toLowerCase();
-                        return this.orders.filter(order =>
-                            order.n_documento.toLowerCase().includes(term) ||
-                            order.tercero.toLowerCase().includes(term) ||
-                            order.vendedor.toLowerCase().includes(term)
-                        );
-                    }
+                    
                 },
 
                 methods: {
 
 
+                     buscarDebounce() {
+
+                        clearTimeout(this.searchTimeout);
+
+                        this.searchTimeout = setTimeout(() => {
+                            this.buscar();
+                        }, 500); // espera 500ms
+                    },
+
+                    buscar() {
+
+                        if (!this.search || this.search.trim() === "") {
+                            window.location.href = window.location.pathname;
+                            return;
+                        }
+
+                        const params = new URLSearchParams({
+                            search: this.search.trim()
+                        });
+
+                        window.location.href = `${window.location.pathname}?${params.toString()}`;
+                    },
+
+
                     // Abre modal con la info del documento
                     openModal(index) {
-                        const workOrder = this.filteredOrders[index];
+                        const workOrder = this.orders[index];
 
                         this.form = {
                             n_documento: workOrder.n_documento,
                             tercero: workOrder.tercero,
+                            tercero_id: workOrder.tercero_id,
                             vendedor: workOrder.vendedor,
                             vendedor_username: workOrder.vendedor_username ?? "",
                             periodo: workOrder.periodo ?? "",
@@ -233,11 +260,43 @@
                         this.mostrarForm = false;
                     },
 
+
+                    async buscarPDServicio() {
+
+                        if (this.pdSearch.length < 3) {
+                            this.pdResults = [];
+                            return;
+                        }
+
+                        const params = new URLSearchParams({
+                            search: this.pdSearch,
+                            vendedor: this.form.vendedor_username,
+                            tercero: this.form.tercero_id
+                        });
+
+                        const resp = await fetch(`/ordenes/pd-servicio?${params}`);
+                        const data = await resp.json();
+                        console.log(data);
+                        
+                        this.pdResults = data;
+
+                        if (data.length === 0) {
+                            alert("No se encontró PD de servicio válido para este cliente y asesor.");
+                        }
+                    },
+                    
+                    seleccionarPD(pd) {
+                        this.form.pd_servicio = pd.IntDocumento;
+                        this.pdSearch = pd.IntDocumento;
+                        this.pdResults = [];
+                    },
+
+
                     // Registrar OT
                     async registrarOT() {
 
-                        if (!this.form.instalador_id) {
-                            alert("Seleccione un instalador.");
+                        if (!this.form.pd_servicio) {
+                            alert("Seleccione un PD de servicio.");
                             return;
                         }
 

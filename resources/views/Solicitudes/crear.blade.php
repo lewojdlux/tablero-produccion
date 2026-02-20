@@ -1,195 +1,263 @@
 @extends('layouts.app')
 
 @section('content')
-<style>
-    .excel-drop {
-        border: 2px dashed #cbd5e1;
-        border-radius: 8px;
-        padding: 24px;
-        text-align: center;
-        background: #f8fafc;
-    }
+    <style>
+        .excel-drop {
+            border: 2px dashed #cbd5e1;
+            border-radius: 8px;
+            padding: 24px;
+            text-align: center;
+            background: #f8fafc;
+        }
 
-    [v-cloak] {
-        display: none;
-    }
+        [v-cloak] {
+            display: none;
+        }
+    </style>
 
-</style>
+    <div id="app" v-cloak class="space-y-6">
 
-<div id="app" v-cloak class="space-y-6">
+        {{-- HEADER --}}
+        <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold">
+                Cargar solicitud de material
+            </h2>
 
-    {{-- HEADER --}}
-    <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold">
-            Cargar solicitud de material
-        </h2>
-
-        <span class="text-xs text-zinc-500">
-            OT #{{ $ordenTrabajo->n_documento }}
-        </span>
-    </div>
-
-    {{-- INFO BASE --}}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-
-        <div class="border rounded p-3">
-            <strong>Instalador</strong><br>
-            {{ optional($ordenTrabajo->instalador)->nombre_instalador ?? '—' }}
-        </div>
-
-        <div class="border rounded p-3">
-            <strong>Cliente</strong><br>
-            {{ $ordenTrabajo->tercero }}
-        </div>
-
-        <div class="border rounded p-3">
-            <strong>Estado OT</strong><br>
-            <span class="px-2 py-0.5 rounded bg-zinc-100">
-                {{ $ordenTrabajo->status }}
+            <span class="text-xs text-zinc-500">
+                OT #{{ $ordenTrabajo->n_documento }}
             </span>
         </div>
 
+        {{-- INFO BASE --}}
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
+
+            <div class="border rounded p-3">
+                <strong>Instalador</strong><br>
+                {{ optional($ordenTrabajo->instalador)->nombre_instalador ?? '—' }}
+            </div>
+
+            <div class="border rounded p-3">
+                <strong>Cliente</strong><br>
+                {{ $ordenTrabajo->tercero }}
+            </div>
+
+            <div class="border rounded p-3">
+                <strong>Estado OT</strong><br>
+                <span class="px-2 py-0.5 rounded bg-zinc-100">
+                    {{ $ordenTrabajo->status }}
+                </span>
+            </div>
+
+        </div>
+
+
+
+        @if (isset($solicitud) && $solicitud)
+            <div class="border rounded-lg p-4 bg-green-50 text-sm">
+                <div class="flex justify-between">
+                    <div>
+                        <strong>Compra registrada</strong><br>
+                        Consecutivo: {{ $solicitud->consecutivo_compra }}<br>
+                        Estado: {{ strtoupper($solicitud->status) }}
+                    </div>
+                    <div class="text-xs text-zinc-500">
+                        {{ \Carbon\Carbon::parse($solicitud->fecha_registro)->format('d/m/Y H:i') }}
+                    </div>
+                </div>
+            </div>
+        @endif
+
+
+
+        {{-- FORM --}}
+        <form ref="form" action="{{ route('solicitudes.store', $ordenTrabajo->id_work_order) }}" method="POST"
+            enctype="multipart/form-data" class="space-y-6" @submit.prevent="submitForm">
+
+            @csrf
+
+            {{-- IDs ocultos --}}
+            <input type="hidden" name="orden_trabajo_id" value="{{ $ordenTrabajo->id_work_order }}">
+            <input type="hidden" name="instalador_id" value="{{ $ordenTrabajo->instalador_id }}">
+
+
+            <div>
+                <label class="text-xs font-medium">
+                    Buscar Orden de Compra (131)
+                </label>
+
+                <input type="text" v-model="searchCompra" @input="buscarCompra"
+                    placeholder="Ingrese número de documento..." class="mt-1 w-full border rounded px-2 py-1 text-xs">
+
+                <div v-if="resultados.length" class="border mt-2 rounded bg-white max-h-40 overflow-y-auto">
+
+
+                    @if (!isset($solicitud))
+                        {{-- buscador compra --}}
+                    @else
+                        <div class="text-xs text-zinc-500">
+                            Esta orden ya tiene una solicitud registrada.
+                        </div>
+                    @endif
+
+                    <div v-for="r in resultados" :key="r.IntDocumento" @click="seleccionarCompra(r)"
+                        class="px-3 py-2 text-xs hover:bg-zinc-100 cursor-pointer">
+
+                        <strong>@{{ r.IntDocumento }}</strong>
+                        <div class="text-zinc-500">
+                            @{{ r.proveedor }}
+                        </div>
+
+                    </div>
+
+                </div>
+            </div>
+
+
+            {{-- OBSERVACIONES --}}
+            <div>
+                <label class="text-xs font-medium">Observaciones</label>
+                <textarea name="observaciones" rows="3" class="mt-1 w-full border rounded px-2 py-1 text-xs"
+                    placeholder="Observaciones generales de la solicitud…"></textarea>
+            </div>
+
+
+
+
+
+            {{-- BOTONES --}}
+            <div class="flex justify-end gap-2 mt-3">
+
+                <a href="{{ route('ordenes.trabajo.asignadas') }}" class="btn btn-outline-secondary btn-sm">
+                    Cancelar
+                </a>
+
+                @if (isset($solicitud) && $solicitud->status === 'approved')
+                    <button type="submit" disabled class="btn btn-success btn-sm">
+                        Solicitud aprobada
+                    </button>
+                @else
+                    <button type="submit" :disabled="enviando" class="btn btn-dark btn-sm">
+                        Guardar solicitud
+                    </button>
+                @endif
+
+            </div>
+
+        </form>
+
+
+
+        {{-- BOTÓN APROBAR FUERA DEL FORM PRINCIPAL --}}
+        @if (isset($solicitud) && $solicitud->status !== 'approved')
+            <form method="POST" action="{{ route('solicitudes.approve', $solicitud->id_solicitud_material) }}"
+                class="d-inline">
+                @csrf
+                <button type="submit" onclick="return confirm('¿Desea aprobar esta solicitud?')"
+                    class="btn btn-success btn-sm">
+                    Aprobar solicitud
+                </button>
+            </form>
+        @endif
+
     </div>
-
-    @if(session('success'))
-        <div class="mb-4 text-sm text-green-700 bg-green-100 border border-green-300 rounded px-4 py-2">
-            {{ session('success') }}
-        </div>
-    @endif
-
-    @if(session('error'))
-        <div class="mb-4 text-sm text-red-700 bg-red-100 border border-red-300 rounded px-4 py-2">
-            {{ session('error') }}
-        </div>
-    @endif
-
-
-    {{-- FORM --}}
-    <form ref="form"
-      action="{{ route('solicitudes.store', $ordenTrabajo->id_work_order) }}"
-      method="POST"
-      enctype="multipart/form-data"
-      class="space-y-6"
-      @submit.prevent="submitForm">
-
-        @csrf
-
-        {{-- IDs ocultos --}}
-        <input type="hidden" name="orden_trabajo_id" value="{{ $ordenTrabajo->id_work_order }}">
-        <input type="hidden" name="instalador_id" value="{{ $ordenTrabajo->instalador_id }}">
-
-        {{-- OBSERVACIONES --}}
-        <div>
-            <label class="text-xs font-medium">Observaciones</label>
-            <textarea name="observaciones"
-                      rows="3"
-                      class="mt-1 w-full border rounded px-2 py-1 text-xs"
-                      placeholder="Observaciones generales de la solicitud…"></textarea>
-        </div>
-
-        {{-- EXCEL --}}
-        <div>
-            <label class="text-xs font-medium">Archivo Excel</label>
-
-            <div class="excel-drop mt-2">
-                    <input type="file"
-                    name="archivo_excel"
-                    accept=".xlsx,.xls"
-                    @change="onFileChange"
-                    class="text-xs">
-                <p class="mt-2 text-[11px] text-zinc-500">
-                    Columnas esperadas:<br>
-                    <strong>
-                        Código | Descripción | Cantidad | Precio sin IVA | IVA
-                    </strong>
-                </p>
-            </div>
-        </div>
-
-        {{-- BOTONES --}}
-        <div class="flex justify-end gap-2">
-            <a href="{{ url()->previous() }}"
-               class="px-4 py-2 text-xs border rounded hover:bg-zinc-50">
-                Cancelar
-            </a>
-
-            <div v-if="error"
-                class="text-xs text-red-600 bg-red-50 border border-red-200 rounded px-3 py-2">
-                @{{ error }}
-            </div>
-
-
-            <button type="submit"
-                    :disabled="enviando"
-                    class="px-4 py-2 text-xs rounded text-white"
-                    :class="enviando ? 'bg-zinc-400 cursor-not-allowed' : 'bg-black hover:bg-zinc-800'">
-
-                <span v-if="!enviando">Guardar solicitud</span>
-                <span v-else>Procesando…</span>
-
-            </button>
-        </div>
-
-    </form>
-
-</div>
 @endsection
 
 
 
 @push('scripts')
-<script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
 
-<script>
-document.addEventListener('DOMContentLoaded', () => {
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
 
-    const { createApp } = Vue;
+            const {
+                createApp
+            } = Vue;
 
-    createApp({
-        data() {
-            return {
-                archivo: null,
-                enviando: false,
-                error: null
-            }
-        },
+            createApp({
+                data() {
+                    return {
+                        searchCompra: '',
+                        resultados: [],
+                        enviando: false,
+                        error: null
+                    }
+                },
 
-        methods: {
+                methods: {
 
-            onFileChange(e) {
-                this.archivo = e.target.files[0];
-                this.error = null;
-            },
+                    async buscarCompra() {
 
-            validarFormulario() {
+                        if (!this.searchCompra || this.searchCompra.length < 3) {
+                            this.resultados = [];
+                            return;
+                        }
 
-                if (!this.archivo) {
-                    this.error = 'Debe adjuntar un archivo Excel.';
-                    return false;
+                        try {
+                            const resp = await fetch(
+                                `/compras-131/buscar?search=${this.searchCompra}`
+                            );
+
+                            if (!resp.ok) {
+                                this.resultados = [];
+                                return;
+                            }
+
+                            this.resultados = await resp.json();
+
+                        } catch (e) {
+
+                            this.resultados = [];
+                        }
+                    },
+
+                    async seleccionarCompra(compra) {
+
+                        if (!confirm(`¿Importar compra ${compra.IntDocumento}?`)) return;
+
+                        this.enviando = true;
+
+                        try {
+
+                            const resp = await fetch(
+                                `/solicitudes/importar-compra`, {
+                                    method: 'POST',
+                                    headers: {
+                                        'Content-Type': 'application/json',
+                                        'X-CSRF-TOKEN': '{{ csrf_token() }}'
+                                    },
+                                    body: JSON.stringify({
+                                        orden_id: {{ $ordenTrabajo->id_work_order }},
+                                        documento: compra.IntDocumento
+                                    })
+                                }
+                            );
+
+                            const json = await resp.json();
+
+                            if (!resp.ok || !json.success) {
+                                alert(json.message || 'Error al importar compra.');
+                                this.enviando = false;
+                                return;
+                            }
+
+
+                            this.resultados = [];
+                            this.searchCompra = '';
+                            alert('Compra registrada correctamente.');
+                            window.location.reload();
+
+                        } catch (e) {
+
+                            alert('Error de comunicación.');
+                        }
+
+                        this.enviando = false;
+                    }
+
                 }
+            }).mount('#app');
 
-                const ext = this.archivo.name.split('.').pop().toLowerCase();
-                if (!['xls', 'xlsx'].includes(ext)) {
-                    this.error = 'El archivo debe ser Excel (.xls o .xlsx).';
-                    return false;
-                }
-
-                return true;
-            },
-
-            submitForm() {
-
-                if (this.enviando) return;
-
-                if (!this.validarFormulario()) return;
-
-                this.enviando = true;
-
-                this.$refs.form.submit();
-            }
-        }
-    }).mount('#app');
-
-});
-</script>
+        });
+    </script>
 @endpush

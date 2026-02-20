@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Events\MaterialSolicitadoEvent;
 use App\Exports\OrdenTrabajoFinancieroExport;
 use App\Models\InstaladorModel;
+use App\Models\OrdenTrabajoJornadaModel;
 use App\Models\OrdenTrabajoModel;
 use App\Models\OrderWorkModel;
 use App\Models\PedidoMaterialItemModel;
@@ -22,7 +23,7 @@ use App\Notifications\NewPedidoMaterial;
 use Illuminate\Support\Facades\Notification;
 use Maatwebsite\Excel\Facades\Excel;
 use Carbon\Carbon;
-
+use Illuminate\Support\Facades\Log;
 class OrdenesTrabajoController
 {
     protected OrderWorkService $orderWorkService;
@@ -78,25 +79,7 @@ class OrdenesTrabajoController
         }
     }
 
-    public function consultar(Request $request)
-    {
-        try {
-            $ndoc = $request->input('ndoc');
-
-            $orderDetail = $this->orderWorkService->getOrderDetail($ndoc);
-
-            return response()->json($orderDetail);
-        } catch (\Exception $e) {
-            // Manejo de errores
-            return response()->json(
-                [
-                    'error' => true,
-                    'message' => $e->getMessage(),
-                ],
-                500,
-            );
-        }
-    }
+ 
 
     /**
      * Store a newly created resource in storage.
@@ -104,12 +87,33 @@ class OrdenesTrabajoController
     public function store(Request $request)
     {
         try {
+
+            $pdValido = \DB::connection('sqlsrv')
+                ->table('TblDocumentos as t')
+                ->join('TblDetalleDocumentos as dd', 'dd.IntDocumento', '=', 't.IntDocumento')
+                ->join('TblProductos as p', 'p.StrIdProducto', '=', 'dd.StrProducto')
+                ->where('t.IntDocumento', $request->pd_servicio)
+                ->where('t.StrDVendedor', $request->vendedor_username)
+                ->where('t.StrTercero', $request->tercero_id)
+                ->where('p.StrLinea', '40')
+                ->exists();
+
+            if (!$pdValido) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'El PD de servicio no corresponde al cliente o asesor.'
+                ]);
+            }
+
+
+
             $ot = \App\Models\OrderWorkModel::create([
                 'n_documento' => $request->n_documento,
                 'pedido' => $request->n_documento,
                 'tercero' => $request->tercero,
                 'vendedor' => $request->vendedor,
-                'instalador_id' => $request->instalador_id,
+                'instalador_id' => null,
+                'pd_servicio'   => $request->pd_servicio,
                 'periodo' => $request->periodo,
                 'ano' => $request->ano,
                 'estado_factura' => $request->status,
@@ -118,6 +122,8 @@ class OrdenesTrabajoController
                 'description' => $request->obsv_pedido,
                 'usereg_ot' => Auth::user()->id,
             ]);
+
+            
             return response()->json([
                 'success' => true,
                 'data' => $ot,
@@ -159,11 +165,14 @@ class OrdenesTrabajoController
     /* función para obtener el material de una orden de trabajo HGI */
     public function verPedidoMaterialHgi($workOrderId)
     {
+     
         $user = Auth::user();
+        $rolesPermitidos = [1, 2, 6, 7];
 
-        // 🔒 Seguridad: solo instalador
-        if ((int) $user->perfil_usuario_id !== 7) {
-            abort(403);
+        if (!in_array((int) $user->perfil_usuario_id, $rolesPermitidos, true)) {
+            return response()->json([
+                'message' => 'No autorizado'
+            ], 403);
         }
 
         $pedido = $this->orderWorkService->getPedidoHgiPorOT($workOrderId);
@@ -175,14 +184,16 @@ class OrdenesTrabajoController
     public function start($id)
     {
         try {
-            $workOrder = \App\Models\OrderWorkModel::findOrFail($id);
-            $workOrder->status = 'in_progress';
-            $workOrder->save();
+
+        
+            $this->orderWorkService->iniciarOrdenTrabajo((int) $id);
 
             return response()->json([
                 'success' => true,
                 'message' => 'Orden de trabajo iniciada correctamente.',
             ]);
+
+            
         } catch (\Exception $e) {
             return response()->json(
                 [
@@ -197,22 +208,25 @@ class OrdenesTrabajoController
     /* funcion para obtener los materiales de una orden de trabajo */
     public function indexMaterialesOrdenes(Request $request, $id)
     {
+
         try {
             $materials = $this->orderWorkService->getMaterialsByOrderId($id);
 
             // 👉 CUANDO VIENE DE VUE (fetch)
-            if ($request->expectsJson()) {
+            if ($request->ajax() || $request->wantsJson()) {
                 return response()->json($materials);
             }
 
             // 👉 CUANDO ES NAVEGACIÓN NORMAL
-            $workOrder = OrderWorkModel::with(['instalador', 'pedidosMateriales.instalador', 'pedidosMateriales.items'])->findOrFail($id);
+            $workOrder = OrderWorkModel::with(['instalador'])->findOrFail($id);
 
             return view('workorders.asignarherramienta', [
-                'materials' => $materials,
+                'dataAsignarMaterialHerramienta' => $materials, // 👈 ESTE ES EL NOMBRE QUE USA VUE
                 'orderId' => $id,
                 'dataAsignarMaterial' => $workOrder,
             ]);
+
+
         } catch (\Exception $e) {
             // Manejo de errores
             return response()->view('errors.500', ['message' => $e->getMessage()], 500);
@@ -223,46 +237,51 @@ class OrdenesTrabajoController
     public function asignarMaterial(Request $request, $orderId)
     {
         try {
+
             $request->validate([
-                'herramienta_id' => 'required|integer',
+                'herramienta_id' => 'required|string',
                 'cantidad' => 'required|integer|min:1',
             ]);
 
-            $materialId = $request->herramienta_id;
+            $codigoProducto = $request->herramienta_id;
             $cantidad = $request->cantidad;
 
-            $registro = WorkOrdersMaterialsModel::where('work_order_id', $orderId)->where('material_id', $materialId)->first();
+            // 🔥 Obtener costo automáticamente desde SQL Server
+            $costoUnitario = $this->orderWorkService
+                ->getCostoActualProducto($codigoProducto);
+
+            // 🔎 Buscar si ya existe
+            $registro = WorkOrdersMaterialsModel::where('work_order_id', $orderId)
+                ->where('material_id', $codigoProducto)
+                ->first();
 
             if ($registro) {
+
                 $registro->cantidad += $cantidad;
+                $registro->ultimo_costo = $costoUnitario; // actualizar costo
                 $registro->save();
+
             } else {
+
                 $registro = WorkOrdersMaterialsModel::create([
                     'work_order_id' => $orderId,
-                    'material_id' => $materialId,
+                    'material_id' => $codigoProducto,
                     'cantidad' => $cantidad,
+                    'ultimo_costo' => $costoUnitario,
                 ]);
             }
 
             return response()->json([
                 'success' => true,
-                'item' => [
-                    'id_work_order_material' => $registro->id_work_order_material,
-                    'id_material' => $materialId,
-                    'cantidad' => $registro->cantidad,
-                    'nombre' => optional($registro->material)->nombre_material ?? optional($registro->material)->nombre,
-                    'codigo' => optional($registro->material)->codigo_material ?? optional($registro->material)->codigo,
-                ],
             ]);
+
         } catch (\Throwable $e) {
-            return response()->json(
-                [
-                    'success' => false,
-                    'message' => 'Error al asignar material',
-                    'error' => $e->getMessage(),
-                ],
-                500,
-            );
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error al asignar material',
+                'error' => $e->getMessage(),
+            ], 500);
         }
     }
 
@@ -270,6 +289,11 @@ class OrdenesTrabajoController
     public function buscarMaterial(Request $request)
     {
         //
+
+         $materialName = $request->input('q');
+            $materials = $this->orderWorkService->getMaterialsByMaterialName($materialName);
+
+            return response()->json($materials);
         try {
             $materialName = $request->input('q');
             $materials = $this->orderWorkService->getMaterialsByMaterialName($materialName);
@@ -463,27 +487,32 @@ class OrdenesTrabajoController
     public function finalizarForm($id)
     {
         try {
-            /*$count = WorkOrdersMaterialsModel::where('work_order_id', $id)->count();
+      
+            $ordenTrabajo = OrderWorkModel::with('acompanantes')
+            ->findOrFail($id);
 
-            /*if ($count === 0) {
-                return redirect()->route('ordenes.trabajo.asignados')->with('error', 'No se puede finalizar la orden de trabajo porque no tiene materiales asignados.');
-            }*/
+            $instaladores = \DB::table('instalador')
+            ->where('status', 'active')
+            ->select('id_instalador', 'nombre_instalador')
+            ->orderBy('nombre_instalador')
+            ->get();
 
-            $user = Auth::user();
+            // 🔹 Principal
+            $principal = $ordenTrabajo->instalador_id;
 
-            if ($user->perfil_usuario_id === 7) {
-                // Si es instalador → traer todos menos él
-                $instaladores = \DB::table('instalador')->where('status', 'active')->where('identificador_usuario', '!=', $user->identificador_instalador)->select('id_instalador', 'nombre_instalador')->orderBy('nombre_instalador')->get();
-            } else {
-                // Si NO es instalador → traer todos
-                $instaladores = \DB::table('instalador')->where('status', 'active')->select('id_instalador', 'nombre_instalador')->orderBy('nombre_instalador')->get();
-            }
+            // 🔹 Acompañantes
+            $acompanantes = $ordenTrabajo->acompanantes
+            ->pluck('id_instalador')
+            ->map(fn($id) => (int) $id)
+            ->toArray();
 
-            $ordenTrabajo = OrderWorkModel::findOrFail($id);
             return view('workorders.finalizar', [
                 'ordenTrabajo' => $ordenTrabajo,
                 'instaladores' => $instaladores,
+                'principal' => $principal,
+                'acompanantes' => $acompanantes,
             ]);
+
         } catch (\Exception $e) {
             // Manejo de errores
             return response()->view('errors.500', ['message' => $e->getMessage()], 500);
@@ -496,7 +525,7 @@ class OrdenesTrabajoController
         return DB::table('orden_trabajo_jornadas')
             ->where('orden_trabajo_id', $id)
             ->orderBy('fecha')
-            ->get(['fecha', 'hora_inicio', 'hora_fin', 'horas_trabajadas', 'observaciones']);
+            ->get(['id',  'numero_jornada', 'fecha', 'hora_inicio', 'hora_fin', 'horas_trabajadas', 'observaciones']);
     }
 
     // función para registrar jornadas de una orden de trabajo
@@ -543,6 +572,38 @@ class OrdenesTrabajoController
         }
     }
 
+    // Función para actualizar una jornada
+    public function actualizarJornada(Request $request,  $id)
+    {
+        $request->validate([
+            'hora_inicio' => 'required',
+            'hora_fin' => 'required',
+        ]);
+
+        $jornada = OrdenTrabajoJornadaModel::findOrFail($id);
+
+        $inicio = \Carbon\Carbon::parse($jornada->fecha . ' ' . $request->hora_inicio);
+        $fin    = \Carbon\Carbon::parse($jornada->fecha . ' ' . $request->hora_fin);
+
+        if ($fin->lte($inicio)) {
+            return response()->json([
+                'type' => 'warning',
+                'message' => 'La hora final debe ser mayor a la hora inicial.'
+            ], 422);
+        }
+
+        $jornada->update([
+            'hora_inicio' => $request->hora_inicio,
+            'hora_fin' => $request->hora_fin,
+            'horas_trabajadas' => round($inicio->diffInMinutes($fin) / 60, 2),
+        ]);
+
+        return response()->json([
+            'type' => 'success',
+            'message' => 'Jornada actualizada.'
+        ]);
+    }
+
     // función para finalizar una orden de trabajo
     public function finalizar(Request $request, int $workorder)
     {
@@ -561,12 +622,12 @@ class OrdenesTrabajoController
 
             $request->validate(
                 [
-                    'installation_notes' => 'required|string|min:10',
+                    'installation_notes' => 'nullable|string',
                 ],
                 [
-                    'installation_notes.required' => 'Las notas de instalación son obligatorias.',
+                    //'installation_notes.required' => 'Las notas de instalación son obligatorias.',
                     'installation_notes.string' => 'Las notas de instalación deben ser un texto válido.',
-                    'installation_notes.min' => 'Las notas de instalación deben tener al menos :min caracteres.',
+                   //'installation_notes.min' => 'Las notas de instalación deben tener al menos :min caracteres.',
                 ],
             );
 
@@ -591,65 +652,21 @@ class OrdenesTrabajoController
     public function verOrdenFinalizada($id)
     {
         try {
-            $ordenTrabajo = OrderWorkModel::with(['instalador', 'pedidosMateriales.instalador', 'pedidosMateriales.items', 'UsuariosOT'])->findOrFail($id);
 
-            if ($ordenTrabajo->status !== 'completed') {
-                return redirect()->route('workorders.index')->with('error', 'La orden no está finalizada.');
-            }
+            $data = $this->orderWorkService->obtenerResumenFinal((int) $id);
 
-            $manoObra = DB::table('vw_calculo_mano_obra_ot')->where('id_work_order', $id)->get();
+            return view('workorders.finalizadashow', $data);
 
-            $manoObraTotal = $manoObra->sum('total');
-
-            $solicitudTotal =
-                DB::table('detalle_solicitud_material as dsm')
-                    ->join('pedidos_materiales as pm', 'pm.id_pedido_material', '=', 'dsm.solicitud_material_id')
-                    ->where('pm.orden_trabajo_id', $id)
-                    ->selectRaw(
-                        '
-                            CAST(
-                                SUM((dsm.cantidad * dsm.precio_unitario) - IFNULL(dsm.descuento,0))
-                            AS DECIMAL(18,2)) as total_material
-                        ',
-                    )
-                    ->value('total_material') ?? 0;
-
-            $pedidoTotal =
-                DB::connection('sqlsrv')
-                    ->table('TblDetalleDocumentos as d')
-                    ->join('TblProductos as p', 'p.StrIdProducto', '=', 'd.StrProducto')
-                    ->where('d.IntDocumento', $ordenTrabajo->pedido)
-                    ->where('d.IntTransaccion', 109)
-                    ->where('p.StrLinea', 40)
-                    ->selectRaw(
-                        '
-                            CAST(
-                                SUM((d.IntCantidad * d.IntValorUnitario) - ISNULL(d.IntValorDescuento,0))
-                            AS DECIMAL(18,2)
-                        ) as total_pedido
-                        ',
-                    )
-                    ->value('total_pedido') ?? 0;
-
-            $utilidad = $pedidoTotal - $manoObraTotal - $solicitudTotal;
-
-            return view('workorders.finalizadashow', [
-                'ordenTrabajo' => $ordenTrabajo,
-                'manoObra' => $manoObra,
-                'manoObraTotal' => $manoObraTotal,
-                'solicitudTotal' => $solicitudTotal,
-                'pedidoTotal' => $pedidoTotal,
-                'utilidad' => $utilidad,
-            ]);
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return redirect()->route('workorders.index')->with('error', 'La orden de trabajo no existe.');
         } catch (\Throwable $e) {
+
             \Log::error('Error al abrir OT finalizada', [
                 'id' => $id,
                 'error' => $e->getMessage(),
             ]);
 
-            return redirect()->route('workorders.index')->with('error', 'Ocurrió un error cargando la orden.');
+            return redirect()
+                ->route('workorders.index')
+                ->with('error', 'Ocurrió un error cargando la orden.');
         }
     }
 
@@ -664,7 +681,9 @@ class OrdenesTrabajoController
             abort(403);
         }
 
-        $pedido = $request->pedido;
+        $ordenTrabajo = OrderWorkModel::findOrFail($id);
+        $pedido = $ordenTrabajo->pd_servicio;
+        //$pedido = $request->pedido;
 
         // 🔹 Mano de obra
         $manoObra = DB::table('vw_calculo_mano_obra_ot')->where('id_work_order', $id)->get();
@@ -673,21 +692,15 @@ class OrdenesTrabajoController
 
         /// cálcular si tiene servicios adicionales a la OT
         $solicitudTotal =
-            DB::table('detalle_solicitud_material as dsm')
-                ->join('pedidos_materiales as pm', 'pm.id_pedido_material', '=', 'dsm.solicitud_material_id')
-                ->where('pm.orden_trabajo_id', $id)
-                ->selectRaw(
-                    '
+            DB::table('work_orders_materials')
+        ->where('work_order_id', $id)
+        ->selectRaw('
             CAST(
-                SUM(
-                    (dsm.cantidad * dsm.precio_unitario)
-                    - IFNULL(dsm.descuento,0)
-                )
+                SUM(IFNULL(ultimo_costo,0))
             AS DECIMAL(18,2)
             ) as total_material
-        ',
-                )
-                ->value('total_material') ?? 0;
+        ')
+        ->value('total_material') ?? 0;
 
         // 🔹 Pedido HGI (línea 40)
         $pedidoTotal =
@@ -709,28 +722,40 @@ class OrdenesTrabajoController
                 )
                 ->value('total_pedido') ?? 0;
 
+        $utilidad = $pedidoTotal - $manoObraTotal - $solicitudTotal;
+
+        $porcentajeUtilidad = 0;
+
+        if ($pedidoTotal > 0) {
+            $porcentajeUtilidad = round(($utilidad / $pedidoTotal) * 100, 2);
+        }
+
         return response()->json([
             'mano_obra' => $manoObra,
             'mano_obra_total' => $manoObraTotal,
             'solicitud_total' => $solicitudTotal,
             'pedido_total' => $pedidoTotal,
             'utilidad' => $pedidoTotal - $manoObraTotal - $solicitudTotal,
+            'porcentaje_utilidad' => $porcentajeUtilidad,
         ]);
     }
 
     // función para exportar el resumen financiero de una orden de trabajo a Excel
     public function exportarFinancieroExcel($id)
     {
+
+   
         try {
             // Validar que la OT exista
             $orden = \DB::table('work_orders')->where('id_work_order', $id)->first();
+
 
             if (!$orden) {
                 return redirect()->back()->with('error', 'La orden de trabajo no existe.');
             }
 
             // Validar que tenga pedido
-            if (empty($orden->pedido)) {
+            if (empty($orden->pd_servicio)) {
                 return redirect()->back()->with('error', 'La OT no tiene pedido asociado.');
             }
 
@@ -743,6 +768,81 @@ class OrdenesTrabajoController
             ]);
 
             return redirect()->back()->with('error', 'Ocurrió un error al generar el Excel.');
+        }
+    }
+
+    // Función para buscar PDServicio
+    public function buscarPDServicio(Request $request)
+    {
+        $search    = $request->search;
+        $vendedor  = $request->vendedor;
+        $tercero   = $request->tercero;
+
+        $result = \DB::connection('sqlsrv')
+            ->table('TblDocumentos as t')
+            ->join('TblDetalleDocumentos as dd', 'dd.IntDocumento', '=', 't.IntDocumento')
+            ->join('TblProductos as p', 'p.StrIdProducto', '=', 'dd.StrProducto')
+            ->where('t.IntTransaccion', 109)
+            ->where('t.StrDVendedor', $vendedor)  
+            ->where('t.StrTercero', $tercero)      
+            ->where('p.StrLinea', '40')      
+            ->where('t.IntDocumento', 'like', "%{$search}%")
+            ->select([
+                't.IntDocumento',
+                't.StrTercero',
+                't.StrDVendedor',
+                'p.StrDescripcion as Descripcion',
+            ])
+            ->distinct()
+            ->take(15)
+            ->get();
+
+        return response()->json($result);
+    }
+
+    // función para obtener los instaladores asignados a una orden de trabajo
+    public function instaladoresActuales($id)
+    {
+        $ot = OrderWorkModel::with('acompanantes')
+            ->findOrFail($id);
+
+        return response()->json([
+            'principal' => $ot->instalador_id,
+            'acompanantes' => $ot->acompanantes->pluck('id_instalador')
+        ]);
+    }
+
+
+    /* función para asignar instaladores */
+    public function asignarInstaladores(Request $request)
+    {
+        $request->validate([
+            'work_order_id'        => 'required|exists:work_orders,id_work_order',
+            'instalador_principal' => 'required|exists:instalador,id_instalador',
+            'acompanantes'         => 'nullable|array',
+            'acompanantes.*'       => 'exists:instalador,id_instalador',
+        ]);
+
+        try {
+                // Asignar instaladores
+                $this->orderWorkService->asignarInstaladores(
+                    $request->work_order_id,
+                    $request->instalador_principal,
+                    $request->acompanantes ?? []
+                );
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Asignación guardada correctamente.'
+                ]);
+
+        }catch (\Exception $e) {
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Ocurrió un problema al guardar.',
+                'error' => $e->getMessage()
+            ], 500);
         }
     }
 }

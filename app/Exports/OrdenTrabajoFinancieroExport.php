@@ -26,7 +26,8 @@ class OrdenTrabajoFinancieroExport implements FromArray, WithStyles, WithTitle
     {
         $orden = DB::table('work_orders')->where('id_work_order', $this->id)->first();
 
-        $pedidoId = $orden->pedido;
+        $pedidoId = $orden->pd_servicio;
+        $pedidoGlobal = $orden->pedido;
 
         // Servicios OT (línea 140)
         $servicios = DB::connection('sqlsrv')
@@ -52,22 +53,11 @@ class OrdenTrabajoFinancieroExport implements FromArray, WithStyles, WithTitle
 
         $manoObraTotal = $manoObra->sum('total');
 
-        $adicionales = DB::table('detalle_solicitud_material as d')
-            ->join('pedidos_materiales as p', 'p.id_pedido_material', '=', 'd.solicitud_material_id')
-            ->where('p.orden_trabajo_id', $this->id)
-            ->selectRaw(
-                "
-                d.codigo_material,
-                d.descripcion_material,
-                d.cantidad,
-                d.precio_unitario,
-                d.descuento,
-                (d.cantidad * d.precio_unitario) - IFNULL(d.descuento,0) as total
-            ",
-            )
+        $adicionales = DB::table('work_orders_materials')
+            ->where('work_order_id', $this->id)
             ->get();
 
-        $adicionalTotal = $adicionales->sum('total');
+        $adicionalTotal = $adicionales->sum('ultimo_costo') ?? 0;
 
         $utilidad = $pedidoTotal - $manoObraTotal - $adicionalTotal;
 
@@ -77,8 +67,8 @@ class OrdenTrabajoFinancieroExport implements FromArray, WithStyles, WithTitle
         $rows[] = ['RESUMEN ORDEN DE TRABAJO'];
         $rows[] = [];
         $rows[] = ['N° OT', $orden->n_documento];
-        $rows[] = ['N° Pedido', $pedidoId];
-        $rows[] = [];
+        $rows[] = ['N° Pedido Global', $pedidoGlobal];
+        $rows[] = ['N° Pedido Servicio', $pedidoId];
 
         // SERVICIOS OT
         $rows[] = ['SERVICIOS OT'];
@@ -111,23 +101,16 @@ class OrdenTrabajoFinancieroExport implements FromArray, WithStyles, WithTitle
 
         // ADICIONALES
         $rows[] = ['SERVICIOS ADICIONALES'];
-        $rows[] = ['Código', 'Descripción', 'Cant', 'V.Unit / Desc', 'Total'];
+        $rows[] = ['Código', 'Descripción', 'Cant', '', 'Total'];
 
         foreach ($adicionales as $a) {
 
-            $valorTexto = '$' . number_format($a->precio_unitario, 2);
-
-            if ($a->descuento > 0) {
-                $valorTexto .= "\nDesc: $" . number_format($a->descuento, 2);
-            }
-
-    
             $rows[] = [
-                $a->codigo_material, 
-                $a->descripcion_material, 
-                $a->cantidad, 
-                $valorTexto,
-                $a->total
+                $a->material_id ?? '',
+                $a->descripcion_material ?? '',
+                $a->cantidad ?? 1,
+                '',
+                $a->ultimo_costo ?? 0
             ];
         }
 
@@ -216,7 +199,11 @@ class OrdenTrabajoFinancieroExport implements FromArray, WithStyles, WithTitle
     |--------------------------------------------------------------------------
     */
         $sheet
-            ->getStyle("E1:E{$lastRow}")
+            ->getStyle("D1:D{$lastRow}")
+            ->getNumberFormat()
+            ->setFormatCode('"$"#,##0.00');
+
+        $sheet->getStyle("E1:E{$lastRow}")
             ->getNumberFormat()
             ->setFormatCode('"$"#,##0.00');
 

@@ -43,7 +43,7 @@ class SolicitudesController
         ]);
     }
 
-    // 🔹 Ver detalle
+    //  Ver detalle
     public function show(Request $request, $id)
     {
         $solicitud = $this->dataSolicitudes->getSolicitudIdService($id);
@@ -52,38 +52,133 @@ class SolicitudesController
             'solicitud' => $solicitud,
         ]);
     }
-
-    // 🔹 Formulario para cargar solicitud (Excel)
+    // ver y crear solicitud
     public function create($id)
     {
-        $ordenTrabajo = OrderWorkModel::with([
-            'instalador',
-            'pedidosMateriales'
-        ])->find($id);
+        $ordenTrabajo = OrderWorkModel::with('instalador')->findOrFail($id);
 
-        if (!$ordenTrabajo) {
-            return redirect()
-                ->route('solicitudes.index')
-                ->with('error', 'Orden de trabajo no encontrada');
-        }
+        $pedidoMaterial = PedidoMaterialModel::where('orden_trabajo_id', $ordenTrabajo->id_work_order)->first();
 
-        // 🔹 VALIDAR SI YA EXISTE SOLICITUD DE MATERIAL
-        $pedidoMaterial = $ordenTrabajo->pedidosMateriales->first();
+        $solicitud = null;
 
         if ($pedidoMaterial) {
-            // 👉 Ya existe → ir al SHOW para agregar / reimportar
-            return redirect()
-                ->route('solicitudes.show', $pedidoMaterial->id_pedido_material)
-                ->with('warning', 'Esta orden ya tiene una solicitud de material. Puede actualizarla adjuntando otro Excel.');
+            $solicitud = SolicitudMaterialModel::where('pedido_material_id', $pedidoMaterial->id_pedido_material)->first();
         }
 
-        // 👉 No existe → continuar al formulario normal
-        return view('Solicitudes.crear', [
-            'ordenTrabajo' => $ordenTrabajo,
-        ]);
+        return view('Solicitudes.crear', compact('ordenTrabajo', 'solicitud'));
     }
 
-    // 🔹 Subir archivo Excel
+    // Buscar
+    public function buscarCompra131(Request $request)
+    {
+        $search = $request->search;
+
+        return DB::connection('sqlsrv')
+            ->table('TblDocumentos as t')
+            ->join('TblTerceros as tc', 't.StrTercero', '=', 'tc.StrIdTercero')
+            ->where('t.IntTransaccion', 131)
+            ->where('t.IntEstado', 0)
+            ->where('t.IntDocumento', 'like', "%{$search}%")
+            ->select('t.IntDocumento', 'tc.StrNombre as proveedor')
+            ->orderByDesc('t.IntDocumento')
+            ->get();
+    }
+
+    // Importar compra desde SQL Server (documento 131)
+    public function importarCompra(Request $request)
+    {
+        DB::beginTransaction();
+
+        try {
+            $ordenTrabajo = OrderWorkModel::findOrFail($request->orden_id);
+
+            $pedido = PedidoMaterialModel::where('orden_trabajo_id', $ordenTrabajo->id_work_order)->firstOrFail();
+
+            $solicitud = SolicitudMaterialModel::where('pedido_material_id', $pedido->id_pedido_material)->first();
+
+            if (!$solicitud) {
+                $solicitud = SolicitudMaterialModel::create([
+                    'pedido_material_id' => $pedido->id_pedido_material,
+                    'consecutivo_compra' => $request->documento,
+                    'status' => 'in_progress',
+                    'ref_id_usuario_registro' => auth()->id(),
+                    'fecha_registro' => now(),
+                ]);
+            } else {
+                $solicitud->update([
+                    'consecutivo_compra' => $request->documento,
+                    'status' => 'in_progress',
+                    'ref_id_usuario_modificacion' => auth()->id(),
+                    'fecha_modificacion' => now(),
+                ]);
+            }
+
+            // Eliminar materiales previamente asociados a la orden de trabajo para evitar duplicados
+            WorkOrdersMaterialsModel::where(
+                'work_order_id',
+                $ordenTrabajo->id_work_order
+            )->delete();
+
+        
+            //  Traer detalles del documento 131
+            $items = DB::connection('sqlsrv')
+                ->table('TblDetalleDocumentos as d')
+                ->join('TblProductos as p', 'p.StrIdProducto', '=', 'd.StrProducto')
+                ->where('d.IntDocumento', $request->documento)
+                ->where('d.IntTransaccion', 131)
+                ->select([
+                    'd.StrProducto',
+                    'd.IntCantidad',
+                    'd.IntValorTotal',
+                    'd.IntValorIva',
+                    'p.StrDescripcion'
+                ])
+                ->get();
+
+            foreach ($items as $item) {
+                WorkOrdersMaterialsModel::updateOrCreate(
+                    [
+                        'work_order_id' => $ordenTrabajo->id_work_order,
+                        'material_id' => $item->StrProducto,
+                    ],
+                    [
+                        'cantidad' => $item->IntCantidad,
+                        'ultimo_costo' => $item->IntValorTotal ?? 0,
+                    ],
+                );
+            }
+
+
+            DB::commit();
+
+            return response()->json([
+                'success' => true,
+            ]);
+        } catch (\Throwable $e) {
+            DB::rollBack();
+
+            return response()->json(
+                [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ],
+                500,
+            );
+        }
+    }
+
+    public function showSolicitud($pedidoMaterialId)
+    {
+        $pedido = SolicitudMaterialModel::with(['pedidoMaterial', 'detalles'])->find($pedidoMaterialId);
+
+        if (!$pedido) {
+            return redirect()->route('solicitudes.index')->with('error', 'Solicitud no encontrada.');
+        }
+
+        return view('Solicitudes.show', compact('pedido'));
+    }
+
+    //  Subir archivo Excel
     public function importExcel(Request $request, $id)
     {
         $request->validate([
@@ -93,7 +188,7 @@ class SolicitudesController
         DB::beginTransaction();
 
         try {
-            // 🔹 1. Pedido material (PADRE)
+            //  1. Pedido material (PADRE)
             $pedidoMaterial = PedidoMaterialModel::firstOrCreate(
                 ['orden_trabajo_id' => $id],
                 [
@@ -109,20 +204,15 @@ class SolicitudesController
 
             $pedidoMaterialId = $pedidoMaterial->id_pedido_material;
 
-
-            // 🔹 GUARDAR ARCHIVO EXCEL COMO ADJUNTO
+            //  GUARDAR ARCHIVO EXCEL COMO ADJUNTO
             $archivo = $request->file('archivo_excel');
 
             // Generar nombre único para evitar colisiones
             $nombreArchivo = 'solicitud_material_' . now()->format('Ymd_His') . '.' . $archivo->getClientOriginalExtension();
 
-            $ruta = $archivo->storeAs(
-                'solicitudes_material/' . $pedidoMaterialId,
-                $nombreArchivo,
-                 'public'
-            );
+            $ruta = $archivo->storeAs('solicitudes_material/' . $pedidoMaterialId, $nombreArchivo, 'public');
 
-            // 🔹 REGISTRAR ADJUNTO EN BD
+            //  REGISTRAR ADJUNTO EN BD
             DB::table('solicitud_material_adjuntos')->insert([
                 'solicitud_material_id' => $pedidoMaterialId,
                 'archivo' => $ruta,
@@ -130,7 +220,7 @@ class SolicitudesController
                 'user_reg' => Auth::id(),
             ]);
 
-            // 🔹 2. Leer Excel
+            //  2. Leer Excel
             $spreadsheet = IOFactory::load($request->file('archivo_excel')->getRealPath());
             $sheet = $spreadsheet->getActiveSheet();
             $rows = $sheet->toArray(null, true, true, true);
@@ -142,14 +232,14 @@ class SolicitudesController
             foreach ($rows as $row) {
                 $row = array_map(fn($v) => trim((string) $v), $row);
 
-                // 🔹 Proveedor + IVA general
+                //  Proveedor + IVA general
                 if (strcasecmp($row['A'], 'proveedor') === 0) {
                     $proveedorNombre = $row['B'] ?? null;
                     $ivaGeneral = is_numeric($row['E']) ? (float) $row['E'] : 0;
                     continue;
                 }
 
-                // 🔹 Ignorar encabezados
+                //  Ignorar encabezados
                 if (empty($row['A']) || in_array(strtolower($row['A']), ['codigo', 'código', 'col a'])) {
                     continue;
                 }
@@ -175,7 +265,7 @@ class SolicitudesController
                 ];
             }
 
-            // 🔹 3. Proveedor (crear si no existe)
+            //  3. Proveedor (crear si no existe)
             if (!$proveedorNombre) {
                 throw new \Exception('El archivo no contiene el proveedor.');
             }
@@ -194,7 +284,7 @@ class SolicitudesController
                 'proveedor_id' => $proveedor->id_supplier,
             ]);
 
-            // 🔹 4. Insert / Update detalles
+            //  4. Insert / Update detalles
             foreach ($materiales as $material) {
                 DetalleSolicitudMaterialModel::updateOrCreate(
                     [
@@ -217,87 +307,64 @@ class SolicitudesController
         }
     }
 
-
-    // 🔹 Aprobar solicitud
-    public function approve($pedidoMaterialId)
+    //  Aprobar solicitud
+    public function approve($solicitudId)
     {
+        $solicitud = SolicitudMaterialModel::with('pedidoMaterial')
+        ->findOrFail($solicitudId);
 
-
-        $pedidoItems = DetalleSolicitudMaterialModel::where('solicitud_material_id', $pedidoMaterialId)->count();
-
-
-        // 1  VALIDACIÓN CLAVE: debe tener materiales
-        if ($pedidoItems <= 0) {
-            return redirect()
-                ->route('solicitudes.show', $pedidoMaterialId)
-                ->with('error', 'No puede aprobar la solicitud porque no tiene materiales importados.');
+        if (!$solicitud->consecutivo_compra) {
+            return back()->with('error', 
+                'No puede aprobar la solicitud porque no tiene compra importada.'
+            );
         }
 
-
-        $pedido = PedidoMaterialModel::where('id_pedido_material', $pedidoMaterialId)->firstOrFail();
-
-        // 2 Validación defensiva
-        if ($pedido->status !== 'queued') {
-            return redirect()
-                ->route('solicitudes.show', $pedidoMaterialId)
-                ->with('warning', 'La solicitud ya fue procesada anteriormente.');
+        if ($solicitud->status === 'approved') {
+            return back()->with('warning', 
+                'La solicitud ya fue aprobada anteriormente.'
+            );
         }
-
 
         try {
-
             DB::beginTransaction();
 
+            $solicitud->update([
+                'status' => 'approved',
+                'ref_id_usuario_modificacion' => auth()->id(),
+                'fecha_modificacion' => now(),
+            ]);
 
-
-            // 3 Cambiar estado del pedido
-            $pedido->update([
+            $solicitud->pedidoMaterial->update([
                 'status' => 'approved',
                 'fecha_aprobacion' => now(),
                 'ref_id_usuario_modificacion' => auth()->id(),
             ]);
 
-            // 4 Registrar materiales en catálogo
-            foreach ($pedido->detalles as $detalle) {
-                $material = MaterialModel::firstOrCreate(
-                    ['codigo_material' => $detalle->codigo_material],
-                    [
-                        'nombre_material' => $detalle->descripcion_material,
-                        'status' => 'active',
-                    ],
-                );
-
-                // 5 Registrar materiales en orden de trabajo
-                $this->registrarMaterialEnOT(
-                    $pedido->orden_trabajo_id,
-                    $material->id_material,
-                    $detalle->cantidad
-                );
-            }
-
             DB::commit();
 
-            return redirect()->route('solicitudes.show', $pedidoMaterialId)->with('success', 'Solicitud aprobada y materiales registrados correctamente.');
+            return back()->with('success', 
+                'Solicitud aprobada correctamente.'
+            );
+
         } catch (\Throwable $e) {
+
             DB::rollBack();
 
-            // Log para ti (backend)
             \Log::error('Error aprobando solicitud', [
-                'pedido_id' => $pedidoMaterialId,
+                'solicitud_id' => $solicitudId,
                 'error' => $e->getMessage(),
             ]);
 
-            // Mensaje claro al usuario
-            return back()->with('error', 'Ocurrió un error al aprobar la solicitud. Intente nuevamente o contacte soporte.');
+            return back()->with('error', 
+                'Ocurrió un error al aprobar la solicitud.'
+            );
         }
     }
 
-    // 🔹 Registrar material en orden de trabajo (desde solicitud aprobada)
+    //  Registrar material en orden de trabajo (desde solicitud aprobada)
     private function registrarMaterialEnOT(int $orderId, int $materialId, int $cantidad): void
     {
-        $registro = WorkOrdersMaterialsModel::where('work_order_id', $orderId)
-            ->where('material_id', $materialId)
-            ->first();
+        $registro = WorkOrdersMaterialsModel::where('work_order_id', $orderId)->where('material_id', $materialId)->first();
 
         if ($registro) {
             $registro->cantidad += $cantidad;
@@ -311,7 +378,7 @@ class SolicitudesController
         }
     }
 
-    // 🔹 Resetear solicitud (eliminar detalles y adjuntos, volver a estado inicial)
+    //  Resetear solicitud (eliminar detalles y adjuntos, volver a estado inicial)
     public function reset($pedidoMaterialId)
     {
         try {
@@ -327,9 +394,7 @@ class SolicitudesController
             DetalleSolicitudMaterialModel::where('solicitud_material_id', $pedidoMaterialId)->delete();
 
             // 2️⃣ Eliminar adjuntos (BD + archivos)
-            $adjuntos = DB::table('solicitud_material_adjuntos')
-                ->where('solicitud_material_id', $pedidoMaterialId)
-                ->get();
+            $adjuntos = DB::table('solicitud_material_adjuntos')->where('solicitud_material_id', $pedidoMaterialId)->get();
 
             foreach ($adjuntos as $adjunto) {
                 if (\Storage::disk('public')->exists($adjunto->archivo)) {
@@ -337,9 +402,7 @@ class SolicitudesController
                 }
             }
 
-            DB::table('solicitud_material_adjuntos')
-                ->where('solicitud_material_id', $pedidoMaterialId)
-                ->delete();
+            DB::table('solicitud_material_adjuntos')->where('solicitud_material_id', $pedidoMaterialId)->delete();
 
             // 3️⃣ Limpiar proveedor (opcional, recomendado)
             $pedido->update([
@@ -349,7 +412,6 @@ class SolicitudesController
             DB::commit();
 
             return back()->with('success', 'Solicitud limpiada correctamente. Puede adjuntar un nuevo Excel.');
-
         } catch (\Throwable $e) {
             DB::rollBack();
 
@@ -362,18 +424,7 @@ class SolicitudesController
         }
     }
 
-    public function showSolicitud($pedidoMaterialId)
-    {
-        $pedido = PedidoMaterialModel::with([
-            'detalles', // relación con detalle_solicitud_material
-            'instalador',
-            'proveedor',
-        ])->findOrFail($pedidoMaterialId);
-
-        return view('Solicitudes.show', compact('pedido'));
-    }
-
-    // 🔹 Guardar manualmente material desde el formulario
+    //  Guardar manualmente material desde el formulario
     public function storeMaterial(Request $request, $id)
     {
         $validated = $request->validate([

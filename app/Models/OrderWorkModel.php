@@ -17,6 +17,7 @@ class OrderWorkModel extends Model
         'tercero',
         'vendedor',
         'instalador_id',
+        'pd_servicio',
         'periodo',
         'ano',
         'n_factura',
@@ -59,6 +60,33 @@ class OrderWorkModel extends Model
         // foreign key on this model, owner key on InstaladorModel
         return $this->belongsTo(InstaladorModel::class, 'instalador_id', 'id_instalador');
     }
+
+    
+    // Relación con acompanantes
+    public function acompanantes()
+    {
+        return $this->belongsToMany(
+            InstaladorModel::class,
+            'order_work_instaladores',
+            'order_work_id',
+            'instalador_id'
+        );
+    }
+
+
+    // Relación con jornadas
+    public function pedidosMateriales()
+    {
+        return $this->hasMany(PedidoMaterialModel::class, 'orden_trabajo_id', 'id_work_order');
+    }
+
+
+    // Relación con Usuarios
+    public function UsuariosOT(){
+        return $this->belongsTo(User::class, 'usuario_finalizacion', 'id');
+    }
+
+
 
     /**
      * Scope para búsqueda (busca en varios campos)
@@ -120,15 +148,8 @@ class OrderWorkModel extends Model
                  ->get();
     }
 
-    public function pedidosMateriales()
-    {
-        return $this->hasMany(PedidoMaterialModel::class, 'orden_trabajo_id', 'id_work_order');
-    }
+  
 
-    public function UsuariosOT(){
-        return $this->belongsTo(User::class, 'usuario_finalizacion', 'id');
-    }
-
-
+    
 
 }

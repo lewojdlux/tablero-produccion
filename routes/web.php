@@ -13,6 +13,7 @@ use App\Http\Controllers\OrdenesTrabajoController;
 use App\Http\Controllers\AsignarMaterialController;
 use App\Http\Controllers\SolicitudesController;
 use App\Http\Controllers\SeguimientoCrmController;
+use App\Http\Controllers\InstaladorController;
 
 
 
@@ -66,12 +67,16 @@ Route::middleware(['auth', 'perfil:1,2,5,6'])
 
         // Rutas para órdenes de trabajo y pedidos de materiales
         Route::get('/ordenes-trabajo/asignar', [OrdenesTrabajoController::class, 'index'])->name('ordenes.trabajo.asignar');
+        Route::get('/ordenes/pd-servicio', [OrdenesTrabajoController::class, 'buscarPDServicio']);
+
         Route::post('/ordenes-trabajo/asignar', [OrdenesTrabajoController::class, 'store'])->name('ordenes.trabajo.store');
         Route::get('/pedidos-materiales/{pedido}', [OrdenesTrabajoController::class, 'show'])->name('pedidos.materiales.show');
         Route::get('/ordenes-trabajo/crear', [OrdenesTrabajoController::class, 'create'])->name('workorders.create');
         Route::get('/ordenes-trabajo/asignados', [OrdenesTrabajoController::class, 'indexAsignados'])->name('ordenes.trabajo.asignadas');
         Route::get('/pedidos-materiales/orden-trabajo/{orderId}', [OrdenesTrabajoController::class, 'verPedidoMaterial'])->name('pedidos.materiales.byOrden');
         Route::get('/ordenes-trabajo/{workorder}', [OrdenesTrabajoController::class, 'verOrden'])->name('workorders.show');
+
+        Route::get('/ordenes-trabajo/{id}/pedido-hgi-admin',[OrdenesTrabajoController::class, 'verPedidoMaterialHgi'])->name('workorders.hgi.pedido.admin');
 
         // Rutas para notificaciones
         Route::get('/notificaciones', function () {
@@ -112,6 +117,11 @@ Route::middleware(['auth', 'perfil:1,2,5,6'])
         Route::post('/ordenes-trabajo/solicitudes/{pedidoMaterial}/approve',[SolicitudesController::class, 'importExcel'])->name('solicitudes.importExcel');
         Route::get('/ordenes-trabajo/solicitudes/{pedidoMaterial}',[SolicitudesController::class, 'showSolicitud'])->name('solicitudes.show');
         Route::get('/ordenes-trabajo/solicitudes/{pedidoMaterial}/aprobados',[SolicitudesController::class, 'showSolicitud'])->name('solicitudes.aprobados');
+
+
+        Route::get('/compras-131/buscar', [SolicitudesController::class, 'buscarCompra131']);
+        Route::post('/solicitudes/importar-compra', [SolicitudesController::class, 'importarCompra']);
+
 
         Route::delete('/solicitudes/{pedidoMaterial}/reset',[SolicitudesController::class, 'reset'])->name('solicitudes.reset');
 
@@ -177,7 +187,7 @@ Route::middleware(['auth', 'perfil:1,2,5'])
             Route::get('imagen', [SeguimientoCrmController::class, 'verImagen'])->name('crm.imagen');
 
 
-            Route::post('/ordenes-trabajo/solicitudes/{pedidoMaterial}/approve',[SolicitudesController::class, 'approve'])->name('solicitudes.approve');
+            Route::post('/ordenes-trabajo/solicitudes/{solicitudId}/approve',[SolicitudesController::class, 'approve'])->name('solicitudes.approve');
 
 
 
@@ -241,6 +251,8 @@ Route::middleware(['auth', 'perfil:7'])
 
     Route::post('/ordenes-trabajo/{id}/jornada-laboral', [OrdenesTrabajoController::class, 'OTJornada'])->name('workorders.otjornada');
 
+    Route::put('/ordenes-trabajo/jornadas/{id}',[OrdenesTrabajoController::class, 'actualizarJornada'])->name('workorders.jornada.update');
+
 
     // Ver orden de trabajo finalizada
     Route::get('/ordenes-trabajo/finalizadas/{id}', [OrdenesTrabajoController::class, 'verOrdenFinalizada'])->name('workorders.finalizadas.show');
@@ -248,6 +260,13 @@ Route::middleware(['auth', 'perfil:7'])
 
     // Ver pedido HGI de una orden de trabajo
     Route::get('/ordenes-trabajo/{id}/pedido-hgi',[OrdenesTrabajoController::class, 'verPedidoMaterialHgi'])->name('workorders.hgi.pedido');
+
+
+    Route::get('/instaladores/listado', [InstaladorController::class, 'listado']);
+    Route::post('/ordenes-trabajo/asignar-instaladores',[OrdenesTrabajoController::class, 'asignarInstaladores']);
+    Route::get('/ordenes-trabajo/{id}/instaladores', [OrdenesTrabajoController::class, 'instaladoresActuales']);
+
+
 
 
 });

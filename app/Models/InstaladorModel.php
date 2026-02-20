@@ -25,4 +25,24 @@ class InstaladorModel extends Model
         // foreign key on OrderWorkModel, local key on this model
         return $this->hasMany(OrderWorkModel::class, 'tecnico_work_orders', 'id_instalador');
     }
+
+
+    public function ordenesPrincipales()
+    {
+        return $this->hasMany(
+            OrderWorkModel::class,
+            'instalador_id',
+            'id_instalador'
+        );
+    }
+
+    public function ordenesComoAcompanante()
+    {
+        return $this->belongsToMany(
+            OrderWorkModel::class,
+            'order_work_instaladores',
+            'instalador_id',
+            'order_work_id'
+        );
+    }
 }

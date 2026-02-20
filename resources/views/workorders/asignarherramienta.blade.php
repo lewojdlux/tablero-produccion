@@ -51,11 +51,16 @@
                                 <div class="fw-semibold">@{{ s.nombre }}</div>
                                 <div class="small text-muted">@{{ s.codigo }}</div>
                             </div>
+                            <div class="small"
+                                :class="s.saldo_disponible > 0 ? 'text-success' : 'text-danger'">
+
+                                Disponible: @{{ parseInt(s.saldo_disponible) > 0 ? s.saldo_disponible : 0 }}
+                            </div>
 
                             <input type="number" min="1" v-model.number="s._cantidad"
                                 class="form-control form-control-sm" style="width:80px">
 
-                            <button class="btn btn-sm btn-success" @click="toggleSeleccion(s)">
+                            <button class="btn btn-sm btn-success" :disabled="s.saldo_disponible <= 0" @click="toggleSeleccion(s)">
                                 @{{ s._selected ? 'Quitar' : 'Añadir' }}
                             </button>
                         </div>
@@ -78,22 +83,31 @@
             <button @click="openPedidoModal({})" class="btn btn-outline-primary ms-2">Solicitar material</button>
         </div>
 
+        @php
+            $isAdminInstalador = in_array(Auth::user()->perfil_usuario_id, [1,2,6]);
+        @endphp
+
         {{-- Tabla de herramientas asignadas --}}
         <div class="table-responsive border rounded p-2 bg-white">
             <table class="table table-sm mb-0">
                 <thead>
                     <tr>
                         <th>Código</th>
-                        <th>Nombre</th>
                         <th>Cantidad</th>
+                        @if ($isAdminInstalador)
+                        <th>Costo</th>
+                        @endif
                         <th>Acciones</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr v-for="item in herramientas" :key="item.id_work_order_material">
-                        <td>@{{ item.codigo_material ?? '—' }}</td>
-                        <td>@{{ item.nombre_material }}</td>
+                        <td>@{{ item.material_id }}</td>
                         <td>@{{ item.cantidad }}</td>
+                        
+                        @if ($isAdminInstalador)
+                        <td>@{{ formatCurrency(item.ultimo_costo) }}</td>
+                        @endif
                         <td><button class="btn btn-sm btn-danger" @click="removeSelected(item)">Eliminar</button></td>
                     </tr>
                     <tr v-if="!herramientas.length">
@@ -156,32 +170,38 @@
         </div>
 
 
+        <!-- Toasts -->
+        <div class="position-fixed top-0 end-0 p-3"
+            style="z-index:9999; width:320px">
 
-        <div class="toast-container position-fixed top-0 end-0 p-3" style="z-index:3000">
-            <div v-for="(toast, index) in toasts"
-                :key="index"
-                class="toast show shadow mb-2"
-                role="alert">
+            <div v-for="t in toasts"
+                :key="t.id"
+                class="rounded shadow mb-2 p-3 text-white"
+                :style="{
+                    backgroundColor:
+                        t.type === 'success' ? '#16a34a' :
+                        t.type === 'danger' ? '#dc2626' :
+                        t.type === 'warning' ? '#d97706' :
+                        '#2563eb'
+                }">
 
-                <div class="toast-header">
-                    <strong class="me-auto">@{{ toast.title }}</strong>
-                    <small class="text-muted">ahora</small>
-                    <button type="button" class="btn-close"
-                            @click="removeToast(index)"></button>
+                <div class="d-flex justify-content-between align-items-start">
+                    <strong>@{{ t.title }}</strong>
+
+                    <button @click="removeToast(t.id)"
+                            style="background:none;border:none;color:white;font-weight:bold;">
+                        ×
+                    </button>
                 </div>
 
-                <div class="toast-body">
-                    @{{ toast.message }}
+                <div class="small mt-1">
+                    @{{ t.message }}
                 </div>
             </div>
         </div>
+        <!-- Fin Toasts -->
 
 
-
-        <div class="toast-container position-fixed top-0 end-0 p-3"
-            style="z-index: 3000"
-            id="toast-container">
-        </div>
 
     </div>
 
@@ -256,6 +276,19 @@
                 },
 
                 methods: {
+
+
+                    formatCurrency(value) {
+                        if (!value) return '$ 0';
+
+                        return new Intl.NumberFormat('es-CO', {
+                            style: 'currency',
+                            currency: 'COP',
+                            minimumFractionDigits: 0
+                        }).format(value);
+                    },
+
+
                     onInput() {
                         this.selected = null;
                         this.focusedIndex = -1;
@@ -285,15 +318,18 @@
                             const data = await res.json();
                             let items = Array.isArray(data) ? data : (data?.data ?? []);
                             this.suggestions = items.map(x => ({
-                                id: x.id_material ?? x.id,
-                                nombre: x.nombre_material ?? x.nombre ?? '',
-                                codigo: x.codigo_material ?? x.codigo ?? '',
+                                id: x.codigo, // código es la llave
+                                nombre: x.nombre,
+                                codigo: x.codigo,
+                                saldo_inventario: x.saldo_inventario,
+                                saldo_reservado: x.saldo_reservado,
+                                saldo_disponible: x.saldo_disponible,
                                 _cantidad: 1,
                                 _selected: false
                             }));
                             this.showSuggestions = this.suggestions.length > 0;
                         } catch (err) {
-                            console.error(err);
+                           
                             this.suggestions = [];
                             this.showSuggestions = false;
                         }
@@ -340,9 +376,22 @@
                             const json = await res.json();
 
                             if (!res.ok || !json.success) {
-                                alert(json?.message || 'Error al agregar material');
+                                this.showToast(
+                                    'Error',
+                                    json?.message || 'No se pudo asignar el material.',
+                                    'danger'
+                                );
                                 return;
                             }
+
+                            // ✅ ÉXITO
+                            this.showToast(
+                                'Material asignado',
+                                'El material se agregó correctamente a la orden.',
+                                'success'
+                            );
+
+                            await this.refreshHerramientas();
 
                             // 🔁 SI YA EXISTE → SUMA
                             if (existente) {
@@ -359,7 +408,6 @@
                             this.cantidad = 1;
 
                         } catch (e) {
-                            console.error(e);
                             alert('Error al comunicarse con el servidor');
                         }
                     },
@@ -406,7 +454,7 @@
                             this.herramientas = this.herramientas.filter(h => (h.id ?? h.id_material) !==
                                 item.id);
                         } catch (e) {
-                            console.error(e);
+                       
                             alert('Error al comunicarse con el servidor.');
                         }
                     },
@@ -486,7 +534,7 @@
 
 
                         } catch (e) {
-                            console.error(e);
+                          
                             alert('Error al comunicarse con el servidor.');
                         } finally {
                             this.pedidoSubmitting = false;
@@ -538,9 +586,20 @@
                                 const json = await res.json();
 
                                 if (!res.ok || !json.success) {
-                                    console.error(json?.message || 'Error al agregar');
+                                    this.showToast(
+                                        'Error',
+                                        json?.message || 'No se pudo asignar el material.',
+                                        'danger'
+                                    );
                                     continue;
                                 }
+
+                                // éxito
+                                this.showToast(
+                                    'Material asignado',
+                                    'El material se agregó correctamente.',
+                                    'success'
+                                );
 
                                 if (existente) {
                                     existente.cantidad += payload.cantidad;
@@ -549,7 +608,7 @@
                                 }
 
                             } catch (e) {
-                                console.error(e);
+                                alert('Error al comunicarse con el servidor');
                             }
                         }
 
@@ -565,7 +624,8 @@
 
                         const res = await fetch(url, {
                             headers: {
-                                'Accept': 'application/json'
+                                'Accept': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
                             }
                         });
 
@@ -585,9 +645,25 @@
                         }, 8000);
                     },
 
-                    removeToast(index) {
-                        this.toasts.splice(index, 1);
-                    }
+                    removeToast(id) {
+                        this.toasts = this.toasts.filter(t => t.id !== id);
+                    },
+
+                    showToast(title, message, type = 'success') {
+
+                        const id = Date.now();
+
+                        this.toasts.unshift({
+                            id,
+                            title,
+                            message,
+                            type
+                        });
+
+                        setTimeout(() => {
+                            this.toasts = this.toasts.filter(t => t.id !== id);
+                        }, 5000);
+                    },
 
                 }
             }).mount('#asignar-herramienta-app');

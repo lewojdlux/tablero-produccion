@@ -12,6 +12,7 @@ class OrdenTrabajoModel extends Model
     public $timestamps = false;
     protected $fillable = [
         'orden_trabajo_id',
+        'numero_jornada',
         'acompanante_ot',
         'fecha',
         'hora_inicio',
@@ -41,6 +42,7 @@ class OrdenTrabajoModel extends Model
         // Registrar la jornada de trabajo
         $this->OrdenTrabajoModel->create([
             'orden_trabajo_id' => $data['orden_trabajo_id'],
+            'numero_jornada'    => $data['numero_jornada'],
             'fecha' => $data['fecha'],
             'hora_inicio' => $data['hora_inicio'],
             'hora_fin' => $data['hora_fin'],

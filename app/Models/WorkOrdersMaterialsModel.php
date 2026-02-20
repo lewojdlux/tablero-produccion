@@ -16,6 +16,7 @@ class WorkOrdersMaterialsModel extends Model
         'work_order_id',
         'material_id',
         'cantidad',
+        'ultimo_costo'
     ];
 
     public function work_order()
