@@ -1,274 +1,305 @@
 @extends('layouts.app')
 
 @section('content')
-    <div class="max-w-6xl mx-auto bg-white p-6 rounded-lg shadow-md">
 
-        <h2 class="text-lg font-semibold mb-4">
-            Orden de Trabajo Finalizada #{{ $ordenTrabajo->n_documento }}
-        </h2>
+    <div class="container py-4">
 
         @php
             $perfil = (int) (auth()->user()->perfil_usuario_id ?? 0);
             $isAdmin = in_array($perfil, [1, 2, 6], true);
         @endphp
 
-        {{-- INFORMACIÓN GENERAL --}}
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6 text-sm">
+        {{-- HEADER --}}
+        <div class="card shadow-sm mb-4">
+            <div class="card-body d-flex justify-content-between align-items-center">
 
-            <div>
-                <p><strong>Cliente:</strong> {{ $ordenTrabajo->tercero }}</p>
-                <p><strong>Asesor:</strong> {{ $ordenTrabajo->vendedor }}</p>
-                <p><strong>Pedido de venta:</strong> {{ $ordenTrabajo->pedido ?? '—' }}</p>
+                <div>
+                    <h4 class="mb-1">
+                        Orden de Trabajo #{{ $ordenTrabajo->n_documento }}
+                    </h4>
+
+                    <small class="text-muted">
+                        Cliente: {{ $ordenTrabajo->tercero ?? '-' }} |
+                        Asesor: {{ $ordenTrabajo->vendedor ?? '-' }} |
+                        Pedido: {{ $ordenTrabajo->pedido ?? '-' }}
+                    </small>
+                </div>
+
+                <span class="badge bg-success fs-6">
+                    Finalizada
+                </span>
+
             </div>
-
-            <div>
-                <p><strong>Instalador:</strong> {{ optional($ordenTrabajo->instalador)->nombre_instalador }}</p>
-                <p><strong>Estado:</strong>
-                    <span class="px-2 py-1 text-xs rounded bg-green-200 text-green-900">
-                        Finalizada
-                    </span>
-                </p>
-                <p><strong>Finalizada por:</strong> {{ optional($ordenTrabajo->UsuariosOT)->name ?? '—' }}</p>
-            </div>
-
         </div>
+
 
         {{-- DESCRIPCIÓN --}}
-        <div class="mb-6 text-sm">
-            <h3 class="font-semibold mb-2">📝 Descripción / Novedades</h3>
-
-            <div class="p-4 border rounded bg-white whitespace-pre-line min-h-[120px]">
-                {{ $ordenTrabajo->installation_notes }}
+        <div class="card shadow-sm mb-4">
+            <div class="card-header fw-semibold">
+                Descripción / Novedades
+            </div>
+            <div class="card-body">
+                {{ $ordenTrabajo->installation_notes ?? 'Sin observaciones' }}
             </div>
         </div>
+
 
         {{-- ================= RESUMEN FINANCIERO ================= --}}
-        <div class="border rounded-xl p-6 bg-white shadow-sm mb-6">
+        <div class="card shadow-sm mb-4">
 
-            <h3 class="font-semibold mb-5 text-base">
-                💰 Resumen Financiero
-            </h3>
-
-            {{-- MANO DE OBRA --}}
-            <div class="mb-6">
-                <h4 class="font-semibold mb-2">Mano de Obra</h4>
-
-                <table class="w-full text-xs border rounded overflow-hidden">
-                    <thead class="bg-zinc-100">
-                        <tr>
-                            <th class="px-3 py-2 text-left">Tipo</th>
-                            <th class="px-3 py-2 text-center">Horas</th>
-                            <th class="px-3 py-2 text-right">Valor Hora</th>
-                            <th class="px-3 py-2 text-right">Total</th>
-                        </tr>
-                    </thead>
-
-                    <tbody>
-                        @foreach ($manoObra as $m)
-                            <tr class="border-t">
-                                <td class="px-3 py-2">
-                                    {{ $m->tipo }} - {{ $m->nombre_instalador }}
-                                </td>
-
-                                <td class="px-3 py-2 text-center">
-                                    {{ number_format($m->horas, 2) }}
-                                </td>
-
-                                <td class="px-3 py-2 text-right">
-                                    @if ($isAdmin)
-                                        $ {{ number_format($m->valor_hora, 0, ',', '.') }}
-                                    @else
-                                        —
-                                    @endif
-                                </td>
-
-                                <td class="px-3 py-2 text-right font-semibold">
-                                    @if ($isAdmin)
-                                        $ {{ number_format($m->total, 0, ',', '.') }}
-                                    @else
-                                        —
-                                    @endif
-                                </td>
-                            </tr>
-                        @endforeach
-                    </tbody>
-
-                    <tfoot class="bg-zinc-50">
-                        <tr>
-                            <td colspan="3" class="text-right px-3 py-2 font-semibold">
-                                Total Mano de Obra
-                            </td>
-                            <td class="text-right px-3 py-2 font-bold">
-                                @if ($isAdmin)
-                                    $ {{ number_format($manoObraTotal, 0, ',', '.') }}
-                                @else
-                                    —
-                                @endif
-                            </td>
-                        </tr>
-                    </tfoot>
-                </table>
+            <div class="card-header fw-bold">
+                Resumen Financiero
             </div>
 
-            <!-- MATERIALES -->
-            @if ($isAdmin && $materiales->count())
-                <div class="mb-6">
-                    <h4 class="font-semibold mb-2">Material Adicional</h4>
+            <div class="card-body">
 
-                    <table class="w-full text-xs border rounded overflow-hidden">
-                        <thead class="bg-zinc-100">
-                            <tr>
-                                <th class="px-3 py-2 text-left">Código</th>
-                                <th class="px-3 py-2 text-left">Descripción</th>
-                                <th class="px-3 py-2 text-center">Cant</th>
-                                <th class="px-3 py-2 text-right">Costo</th>
-                            </tr>
-                        </thead>
+                {{-- MANO DE OBRA --}}
+                <div class="mb-4">
+                    <h6 class="fw-bold text-uppercase text-muted mb-3">
+                        Mano de Obra
+                    </h6>
 
-                        <tbody>
-                            @foreach ($materiales as $mat)
-                                <tr class="border-t">
-                                    <td class="px-3 py-2">
-                                        {{ $mat->material_id ?? '—' }}
-                                    </td>
+                    <div class="table-responsive">
+                        <table class="table table-hover table-sm align-middle">
 
-                                    <td class="px-3 py-2">
-                                        {{ $mat->descripcion_material ?? '—' }}
-                                    </td>
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Tipo</th>
+                                    <th class="text-center">Horas</th>
+                                    <th class="text-end">Valor Hora</th>
+                                    <th class="text-end">Total</th>
+                                </tr>
+                            </thead>
 
-                                    <td class="px-3 py-2 text-center">
-                                        {{ $mat->cantidad ?? 1 }}
-                                    </td>
+                            <tbody>
+                                @forelse ($manoObra as $m)
+                                    <tr>
+                                        <td>{{ $m->tipo }} - {{ $m->nombre_instalador }}</td>
+                                        <td class="text-center">{{ number_format($m->horas ?? 0, 2) }}</td>
+                                        <td class="text-end">$ {{ number_format($m->valor_hora ?? 0, 0, ',', '.') }}</td>
+                                        <td class="text-end fw-semibold">
+                                            $ {{ number_format($m->total ?? 0, 0, ',', '.') }}
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted py-3">
+                                            Sin registros
+                                        </td>
+                                    </tr>
+                                @endforelse
+                            </tbody>
 
-                                    <td class="px-3 py-2 text-right font-semibold">
-                                        $ {{ number_format($mat->ultimo_costo, 0, ',', '.') }}
+                            <tfoot class="table-light">
+                                <tr>
+                                    <th colspan="3" class="text-end">
+                                        Total Mano de Obra
+                                    </th>
+                                    <th class="text-end">
+                                        $ {{ number_format($manoObraTotal ?? 0, 0, ',', '.') }}
+                                    </th>
+                                </tr>
+                            </tfoot>
+
+                        </table>
+                    </div>
+                </div>
+
+
+                {{-- MATERIAL ADICIONAL --}}
+                @if ($isAdmin)
+                    <div class="mb-4">
+                        <h6 class="fw-bold text-uppercase text-muted mb-3">
+                            Material Adicional
+                        </h6>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm align-middle">
+
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th class="text-center">Cant</th>
+                                        <th class="text-end">V. Unitario</th>
+                                        <th class="text-end">Total</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @forelse ($materiales as $mat)
+                                        <tr>
+                                            <td>{{ $mat->material_id ?? '-' }}</td>
+                                            <td>{{ $mat->descripcion_material ?? '-' }}</td>
+                                            <td class="text-center">{{ $mat->cantidad ?? 0 }}</td>
+                                            <td class="text-end">
+                                                $ {{ number_format($mat->ultimo_costo ?? 0, 0, ',', '.') }}
+                                            </td>
+                                            <td class="text-end fw-semibold">
+                                                $ {{ number_format($mat->total ?? 0, 0, ',', '.') }}
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted py-3">
+                                                Sin materiales
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <th colspan="4" class="text-end">
+                                            Total Material
+                                        </th>
+                                        <th class="text-end">
+                                            $ {{ number_format($solicitudTotal ?? 0, 0, ',', '.') }}
+                                        </th>
+                                    </tr>
+                                </tfoot>
+
+                            </table>
+                        </div>
+                    </div>
+                @endif
+
+
+                {{-- SERVICIOS --}}
+                @if ($isAdmin)
+                    <div class="mb-4">
+                        <h6 class="fw-bold text-uppercase text-muted mb-3">
+                            Servicios Pedido
+                        </h6>
+
+                        <div class="table-responsive">
+                            <table class="table table-hover table-sm align-middle">
+
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Código</th>
+                                        <th>Descripción</th>
+                                        <th class="text-center">Cant</th>
+                                        <th class="text-end">Valor Unit</th>
+                                        <th class="text-end">Total</th>
+                                    </tr>
+                                </thead>
+
+                                <tbody>
+                                    @forelse ($servicios as $s)
+                                        <tr>
+                                            <td>{{ $s->codigo ?? '-' }}</td>
+                                            <td>{{ $s->descripcion ?? '-' }}</td>
+                                            <td class="text-center">{{ $s->cantidad ?? 0 }}</td>
+                                            <td class="text-end">
+                                                $ {{ number_format($s->valor_unitario ?? 0, 0, ',', '.') }}
+                                            </td>
+                                            <td class="text-end fw-semibold">
+                                                $ {{ number_format($s->total ?? 0, 0, ',', '.') }}
+                                            </td>
+                                        </tr>
+                                    @empty
+                                        <tr>
+                                            <td colspan="5" class="text-center text-muted py-3">
+                                                Sin servicios
+                                            </td>
+                                        </tr>
+                                    @endforelse
+                                </tbody>
+
+                                <tfoot class="table-light">
+                                    <tr>
+                                        <th colspan="4" class="text-end">
+                                            Total Pedido Servicio
+                                        </th>
+                                        <th class="text-end">
+                                            $ {{ number_format($pedidoTotal ?? 0, 0, ',', '.') }}
+                                        </th>
+                                    </tr>
+                                </tfoot>
+
+                            </table>
+                        </div>
+                    </div>
+                @endif
+
+
+                {{-- KPI CARDS --}}
+                <div class="card shadow-sm mt-4">
+
+                    <div class="card-body p-0">
+
+                        <table class="table table-sm mb-0 align-middle">
+
+                            <tbody>
+
+                                <tr>
+                                    <th class="text-uppercase text-muted ps-4">
+                                        Total Mano de Obra
+                                    </th>
+                                    <td class="text-end pe-4 fw-semibold">
+                                        $ {{ number_format($manoObraTotal ?? 0, 2, ',', '.') }}
                                     </td>
                                 </tr>
-                            @endforeach
-                        </tbody>
 
-                        <tfoot class="bg-zinc-50">
-                            <tr>
-                                <td colspan="3" class="text-right px-3 py-2 font-semibold">
-                                    Total Material
-                                </td>
-                                <td class="text-right px-3 py-2 font-bold">
-                                    $ {{ number_format($solicitudTotal, 0, ',', '.') }}
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            @endif
-
-            <!-- SERVICIOS -->
-            @if ($isAdmin && $servicios->count())
-                <div class="mb-6">
-                    <h4 class="font-semibold mb-2">Servicios Pedido</h4>
-
-                    <table class="w-full text-xs border rounded overflow-hidden">
-                        <thead class="bg-zinc-100">
-                            <tr>
-                                <th class="px-3 py-2 text-left">Código</th>
-                                <th class="px-3 py-2 text-left">Descripción</th>
-                                <th class="px-3 py-2 text-center">Cant</th>
-                                <th class="px-3 py-2 text-right">Valor Unit</th>
-                                <th class="px-3 py-2 text-right">Total</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            @foreach ($servicios as $s)
-                                <tr class="border-t">
-                                    <td class="px-3 py-2">{{ $s->codigo }}</td>
-                                    <td class="px-3 py-2">{{ $s->descripcion }}</td>
-                                    <td class="px-3 py-2 text-center">{{ $s->cantidad }}</td>
-                                    <td class="px-3 py-2 text-right">
-                                        $ {{ number_format($s->valor_unitario, 0, ',', '.') }}
-                                    </td>
-                                    <td class="px-3 py-2 text-right font-semibold">
-                                        $ {{ number_format($s->total, 0, ',', '.') }}
+                                <tr>
+                                    <th class="text-uppercase text-muted ps-4">
+                                        Total Material
+                                    </th>
+                                    <td class="text-end pe-4 fw-semibold">
+                                        $ {{ number_format($solicitudTotal ?? 0, 0, ',', '.') }}
                                     </td>
                                 </tr>
-                            @endforeach
-                        </tbody>
 
-                        <tfoot class="bg-zinc-50">
-                            <tr>
-                                <td colspan="4" class="text-right px-3 py-2 font-semibold">
-                                    Total Pedido Servicio
-                                </td>
-                                <td class="text-right px-3 py-2 font-bold">
-                                    $ {{ number_format($pedidoTotal, 0, ',', '.') }}
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            @endif
+                                <tr>
+                                    <th class="text-uppercase text-muted ps-4">
+                                        Total Pedido
+                                    </th>
+                                    <td class="text-end pe-4 fw-semibold">
+                                        $ {{ number_format($pedidoTotal ?? 0, 0, ',', '.') }}
+                                    </td>
+                                </tr>
 
+                                <tr class="table-light">
+                                    <th class="text-uppercase ps-4">
+                                        Utilidad
+                                    </th>
+                                    <td
+                                        class="text-end pe-4 fw-bold
+                                        {{ $utilidad >= 0 ? 'text-success' : 'text-danger' }}">
+                                        $ {{ number_format($utilidad ?? 0, 2, ',', '.') }}
+                                    </td>
+                                </tr>
 
-            {{-- TARJETAS RESUMEN --}}
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                <tr>
+                                    <th class="text-uppercase text-muted ps-4">
+                                        Margen %
+                                    </th>
+                                    <td
+                                        class="text-end pe-4 fw-semibold
+                                        {{ $porcentajeUtilidad >= 0 ? 'text-success' : 'text-danger' }}">
+                                        {{ number_format($porcentajeUtilidad ?? 0, 2) }} %
+                                    </td>
+                                </tr>
 
-                <div class="border p-5 rounded-lg bg-zinc-50">
-                    <p class="text-sm text-zinc-500">Total Pedido</p>
-                    <p class="text-xl font-bold">
-                        @if ($isAdmin)
-                            $ {{ number_format($pedidoTotal, 0, ',', '.') }}
-                        @else
-                            —
-                        @endif
-                    </p>
-                </div>
+                            </tbody>
 
-                <div class="border p-5 rounded-lg bg-zinc-50">
-                    <p class="text-sm text-zinc-500">Material Adicional</p>
-                    <p class="text-xl font-bold">
-                        @if ($isAdmin)
-                            $ {{ number_format($solicitudTotal, 0, ',', '.') }}
-                        @else
-                            —
-                        @endif
-                    </p>
-                </div>
+                        </table>
 
-                <div class="border p-6 rounded-lg bg-white col-span-1 md:col-span-2 shadow-sm">
-                    <p class="text-sm text-zinc-500">Utilidad</p>
-
-                    @if ($isAdmin)
-                        <p
-                            class="text-2xl font-bold 
-                    {{ $utilidad >= 0 ? 'text-green-600' : 'text-red-600' }}">
-                            $ {{ number_format($utilidad, 0, ',', '.') }}
-                        </p>
-
-                        <p class="text-sm mt-2 text-zinc-600">
-                            Margen:
-                            <span
-                                class="font-semibold 
-                        {{ $porcentajeUtilidad >= 0 ? 'text-green-600' : 'text-red-600' }}">
-                                {{ $porcentajeUtilidad }} %
-                            </span>
-                        </p>
-                    @else
-                        <p class="text-lg text-zinc-500">
-                            Información restringida
-                        </p>
-                    @endif
+                    </div>
                 </div>
 
             </div>
-
         </div>
 
 
-
-        <div class="flex justify-end gap-2">
+        {{-- BOTÓN --}}
+        <div class="text-end">
             <a href="{{ route('ordenes.trabajo.asignadas') }}" class="btn btn-secondary">
                 Volver
             </a>
         </div>
 
     </div>
+
 @endsection

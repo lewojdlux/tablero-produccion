@@ -16,7 +16,11 @@ class OrderWorkModel extends Model
         'pedido',
         'tercero',
         'vendedor',
+        'codigo_asesor',
         'instalador_id',
+        'fecha_programada',
+        'fecha_programada_fin',
+        'observacion_programacion',
         'pd_servicio',
         'periodo',
         'ano',
@@ -61,7 +65,7 @@ class OrderWorkModel extends Model
         return $this->belongsTo(InstaladorModel::class, 'instalador_id', 'id_instalador');
     }
 
-    
+
     // Relación con acompanantes
     public function acompanantes()
     {
@@ -148,8 +152,8 @@ class OrderWorkModel extends Model
                  ->get();
     }
 
-  
 
-    
+
+
 
 }

@@ -109,7 +109,7 @@
 
 
                 <label class="text-xs font-semibold">PD Servicio (Línea 40)</label>
-                <input 
+                <input
                     type="text"
                     v-model="pdSearch"
                     @input="buscarPDServicio"
@@ -118,7 +118,7 @@
                 />
 
                 <div v-if="pdResults.length" class="border rounded mt-1 max-h-40 overflow-y-auto text-xs">
-                    <div 
+                    <div
                         v-for="pd in pdResults"
                         :key="pd.IntDocumento"
                         @click="seleccionarPD(pd)"
@@ -188,7 +188,7 @@
                             ano: "",
                             obsv_pedido: "",
                             n_factura: "",
-                             pd_servicio: "",
+                            pd_servicio: "",
                             status: "pending",
                             estado: '',
                             description: ""
@@ -196,7 +196,7 @@
                     };
                 },
                 computed: {
-                    
+
                 },
 
                 methods: {
@@ -276,15 +276,15 @@
 
                         const resp = await fetch(`/ordenes/pd-servicio?${params}`);
                         const data = await resp.json();
-                        console.log(data);
-                        
+
+
                         this.pdResults = data;
 
                         if (data.length === 0) {
                             alert("No se encontró PD de servicio válido para este cliente y asesor.");
                         }
                     },
-                    
+
                     seleccionarPD(pd) {
                         this.form.pd_servicio = pd.IntDocumento;
                         this.pdSearch = pd.IntDocumento;
@@ -295,10 +295,10 @@
                     // Registrar OT
                     async registrarOT() {
 
-                        if (!this.form.pd_servicio) {
+                        /*if (!this.form.pd_servicio) {
                             alert("Seleccione un PD de servicio.");
                             return;
-                        }
+                        }*/
 
                         const resp = await fetch("{{ route('ordenes.trabajo.store') }}", {
                             method: "POST",
@@ -309,14 +309,16 @@
                             body: JSON.stringify(this.form)
                         });
 
-
-
                         const json = await resp.json();
-                        if (json.success) {
-                            alert("Orden registrada correctamente.");
-                            this.mostrarForm = false;
-                            location.reload();
+
+                        if (!resp.ok || !json.success) {
+                            alert(json.message || "Ocurrió un error.");
+                            return;
                         }
+
+                        alert("Orden registrada correctamente.");
+                        this.mostrarForm = false;
+                        location.reload();
                     }
 
                 }

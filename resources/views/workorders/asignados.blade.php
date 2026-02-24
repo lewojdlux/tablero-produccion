@@ -201,7 +201,7 @@
 
                                         {{-- ================= ASIGNAR MATERIAL ================= --}}
                                         @if ($isInstalador)
-                                            <li>
+                                            <li v-if="workOrder.status !== 'completed'">
                                                 <a class="dropdown-item" href="#"
                                                     @click.prevent="irAsignarMaterial(workOrder.id_work_order)">
                                                     <i class="fas fa-tools me-2 text-warning"></i>
@@ -213,11 +213,22 @@
 
                                         {{-- ================= ASIGNAR INSTALADORES ================= --}}
                                         @if ($isInstalador)
-                                            <li>
+                                            <li v-if="workOrder.status !== 'completed'">
                                                 <a class="dropdown-item" href="#"
                                                     @click.prevent="abrirModalAsignacion(workOrder.id_work_order)">
                                                     <i class="fas fa-user-cog me-2 text-primary"></i>
                                                     Asignar Instaladores
+                                                </a>
+                                            </li>
+                                        @endif
+
+
+                                        @if ($isInstalador)
+                                            <li>
+                                                <a class="dropdown-item" href="#"
+                                                    @click.prevent="abrirModalProgramacion(workOrder)">
+                                                    <i class="fas fa-calendar-alt me-2 text-primary"></i>
+                                                    Programar OT
                                                 </a>
                                             </li>
                                         @endif
@@ -266,6 +277,16 @@
                                                     @click.prevent="irCargarSolicitud(workOrder.id_work_order)">
                                                     <i class="fas fa-clipboard-list me-2 text-warning"></i>
                                                     Ver Solicitudes Material
+                                                </a>
+                                            </li>
+                                        @endif
+
+                                        @if ($isAsesor)
+                                            <li>
+                                                <a class="dropdown-item" href="#"
+                                                    @click.prevent="verProgramacionOT(workOrder)">
+                                                    <i class="fas fa-eye me-2 text-info"></i>
+                                                    Ver Programación
                                                 </a>
                                             </li>
                                         @endif
@@ -383,15 +404,19 @@
                         <div class="table-responsive">
                             <table class="table table-bordered table-sm align-middle mb-0">
 
+                                <!-- ================= THEAD ================= -->
                                 <thead class="table-dark text-center">
                                     <tr>
                                         <th>Código</th>
                                         <th>Producto</th>
                                         <th>Cant.</th>
-                                        <th>Vlr Unit</th>
-                                        <th>Subtotal</th>
-                                        <th>Descuento</th>
-                                        <th>Total</th>
+
+                                        @if ($isAdmin || $isAdminInstalador)
+                                            <th>Vlr Unit</th>
+                                            <th>Subtotal</th>
+                                            <th>Descuento</th>
+                                            <th>Total</th>
+                                        @endif
                                     </tr>
                                 </thead>
 
@@ -399,7 +424,8 @@
 
                                     <!-- ================= PD GLOBAL ================= -->
                                     <tr class="table-primary">
-                                        <td colspan="7" class="fw-bold text-center">
+                                        <td colspan="{{ $isAdmin || $isAdminInstalador ? 7 : 3 }}"
+                                            class="fw-bold text-center">
                                             📦 Pedido Global
                                         </td>
                                     </tr>
@@ -414,37 +440,43 @@
                                             @{{ Number(p.cantidad).toFixed(2) }}
                                         </td>
 
-                                        <td class="text-end">
-                                            $ @{{ Number(p.valor_unitario).toLocaleString('es-CO') }}
-                                        </td>
+                                        @if ($isAdmin || $isAdminInstalador)
+                                            <td class="text-end">
+                                                $ @{{ Number(p.valor_unitario).toLocaleString('es-CO') }}
+                                            </td>
 
-                                        <td class="text-end">
-                                            $ @{{ Number(p.subtotal).toLocaleString('es-CO') }}
-                                        </td>
+                                            <td class="text-end">
+                                                $ @{{ Number(p.subtotal).toLocaleString('es-CO') }}
+                                            </td>
 
-                                        <td class="text-end text-danger">
-                                            $ @{{ Number(p.valor_descuento).toLocaleString('es-CO') }}
-                                        </td>
+                                            <td class="text-end text-danger">
+                                                $ @{{ Number(p.valor_descuento).toLocaleString('es-CO') }}
+                                            </td>
 
-                                        <td class="text-end fw-bold text-success">
-                                            $ @{{ Number(p.total_con_descuento).toLocaleString('es-CO') }}
-                                        </td>
+                                            <td class="text-end fw-bold text-success">
+                                                $ @{{ Number(p.total_con_descuento).toLocaleString('es-CO') }}
+                                            </td>
+                                        @endif
                                     </tr>
 
                                     <!-- TOTAL PD GLOBAL -->
-                                    <tr class="table-secondary">
-                                        <td colspan="6" class="text-end fw-bold">
-                                            TOTAL PD GLOBAL
-                                        </td>
-                                        <td class="text-end fw-bold">
-                                            $ @{{ totalGlobal.toLocaleString('es-CO') }}
-                                        </td>
-                                    </tr>
+                                    @if ($isAdmin || $isAdminInstalador)
+                                        <tr class="table-secondary">
+                                            <td colspan="6" class="text-end fw-bold">
+                                                TOTAL PD GLOBAL
+                                            </td>
+                                            <td class="text-end fw-bold">
+                                                $ @{{ totalGlobal.toLocaleString('es-CO') }}
+                                            </td>
+                                        </tr>
+                                    @endif
 
 
                                     <!-- ================= PD SERVICIO ================= -->
                                     <tr v-if="pedidoServicio.length" class="table-warning">
-                                        <td colspan="7" class="fw-bold text-center">
+
+                                        <td colspan="{{ $isAdmin || $isAdminInstalador ? 7 : 3 }}"
+                                            class="fw-bold text-center">
                                             🔧 Pedido Servicio (Instalación)
                                         </td>
                                     </tr>
@@ -459,42 +491,46 @@
                                             @{{ Number(p.cantidad).toFixed(2) }}
                                         </td>
 
-                                        <td class="text-end">
-                                            $ @{{ Number(p.valor_unitario).toLocaleString('es-CO') }}
-                                        </td>
+                                        @if ($isAdmin || $isAdminInstalador)
+                                            <td class="text-end">
+                                                $ @{{ Number(p.valor_unitario).toLocaleString('es-CO') }}
+                                            </td>
 
-                                        <td class="text-end">
-                                            $ @{{ Number(p.subtotal).toLocaleString('es-CO') }}
-                                        </td>
+                                            <td class="text-end">
+                                                $ @{{ Number(p.subtotal).toLocaleString('es-CO') }}
+                                            </td>
 
-                                        <td class="text-end text-danger">
-                                            $ @{{ Number(p.valor_descuento).toLocaleString('es-CO') }}
-                                        </td>
+                                            <td class="text-end text-danger">
+                                                $ @{{ Number(p.valor_descuento).toLocaleString('es-CO') }}
+                                            </td>
 
-                                        <td class="text-end fw-bold text-success">
-                                            $ @{{ Number(p.total_con_descuento).toLocaleString('es-CO') }}
-                                        </td>
+                                            <td class="text-end fw-bold text-success">
+                                                $ @{{ Number(p.total_con_descuento).toLocaleString('es-CO') }}
+                                            </td>
+                                        @endif
                                     </tr>
 
                                     <!-- TOTAL PD SERVICIO -->
-                                    <tr v-if="pedidoServicio.length" class="table-secondary">
-                                        <td colspan="6" class="text-end fw-bold">
-                                            TOTAL PD SERVICIO
-                                        </td>
-                                        <td class="text-end fw-bold">
-                                            $ @{{ totalServicio.toLocaleString('es-CO') }}
-                                        </td>
-                                    </tr>
+                                    @if ($isAdmin || $isAdminInstalador)
+                                        <tr v-if="pedidoServicio.length" class="table-secondary">
+                                            <td colspan="6" class="text-end fw-bold">
+                                                TOTAL PD SERVICIO
+                                            </td>
+                                            <td class="text-end fw-bold">
+                                                $ @{{ totalServicio.toLocaleString('es-CO') }}
+                                            </td>
+                                        </tr>
 
-                                    <!-- ================= TOTAL GENERAL ================= -->
-                                    <tr class="table-dark">
-                                        <td colspan="6" class="text-end fw-bold text-uppercase">
-                                            TOTAL GENERAL
-                                        </td>
-                                        <td class="text-end fw-bold">
-                                            $ @{{ totalGeneral.toLocaleString('es-CO') }}
-                                        </td>
-                                    </tr>
+                                        <!-- TOTAL GENERAL -->
+                                        <tr class="table-dark">
+                                            <td colspan="6" class="text-end fw-bold text-uppercase">
+                                                TOTAL GENERAL
+                                            </td>
+                                            <td class="text-end fw-bold">
+                                                $ @{{ totalGeneral.toLocaleString('es-CO') }}
+                                            </td>
+                                        </tr>
+                                    @endif
 
                                 </tbody>
                             </table>
@@ -513,7 +549,6 @@
             </div>
         </div>
         <!-- FIN MODAL PEDIDO HGI -->
-
 
         <!-- MODAL MANO DE OBRA -->
         <div v-if="mostrarManoObra" class="modal fade show d-block" tabindex="-1" style="background: rgba(0,0,0,0.6);">
@@ -539,6 +574,7 @@
 
                                 <thead class="text-uppercase small text-muted border-bottom">
                                     <tr>
+                                        <th>Instalador</th>
                                         <th>Tipo</th>
                                         <th class="text-center">Horas</th>
                                         <th class="text-end">Valor Hora</th>
@@ -548,23 +584,12 @@
 
                                 <tbody>
 
-                                    <tr v-for="m in manoObra" :key="m.id_instalador" class="border-bottom">
-
-                                        <td class="fw-semibold text-dark">
-                                            @{{ m.tipo }}
-                                        </td>
-
-                                        <td class="text-center text-secondary">
-                                            @{{ Number(m.horas).toFixed(2) }}
-                                        </td>
-
-                                        <td class="text-end text-secondary">
-                                            $ @{{ Number(m.valor_hora).toLocaleString() }}
-                                        </td>
-
-                                        <td class="text-end fw-semibold text-dark">
-                                            $ @{{ Number(m.total).toLocaleString() }}
-                                        </td>
+                                    <tr v-for="m in manoObra" :key="m.id_instalador + m.tipo">
+                                        <td>@{{ m.nombre_instalador }}</td>
+                                        <td>@{{ m.tipo }}</td>
+                                        <td class="text-center">@{{ Number(m.horas).toFixed(2) }}</td>
+                                        <td class="text-end">$ @{{ Number(m.valor_hora).toLocaleString('es-CO') }}</td>
+                                        <td class="text-end fw-bold">$ @{{ Number(m.total).toLocaleString('es-CO') }}</td>
 
                                     </tr>
 
@@ -573,56 +598,49 @@
                                 <tfoot class="border-top">
 
                                     <tr>
-                                        <td colspan="3" class="text-end fw-semibold text-muted">
+                                        <td colspan="4" class="text-end fw-semibold text-muted">
                                             TOTAL MANO DE OBRA
                                         </td>
                                         <td class="text-end fw-bold text-dark">
-                                            $ @{{ Number(manoObraTotal).toLocaleString() }}
+                                            $ @{{ Number(manoObraTotal).toLocaleString('es-CO') }}
                                         </td>
                                     </tr>
 
                                     <tr>
-                                        <td colspan="3" class="text-end fw-semibold text-muted">
+                                        <td colspan="4" class="text-end fw-semibold text-muted">
                                             TOTAL MATERIAL
                                         </td>
                                         <td class="text-end fw-bold text-dark">
-                                            $ @{{ Number(materialTotal).toLocaleString() }}
+                                            $ @{{ Number(materialTotal).toLocaleString('es-CO') }}
                                         </td>
                                     </tr>
 
                                     <tr>
-                                        <td colspan="3" class="text-end fw-semibold text-muted">
+                                        <td colspan="4" class="text-end fw-semibold text-muted">
                                             TOTAL PEDIDO
                                         </td>
                                         <td class="text-end fw-bold text-dark">
-                                            $ @{{ Number(pedidoTotal).toLocaleString() }}
+                                            $ @{{ Number(pedidoTotal).toLocaleString('es-CO') }}
                                         </td>
                                     </tr>
 
                                     <tr class="border-top">
-                                        <td colspan="3" class="text-end fw-bold text-uppercase">
+                                        <td colspan="4" class="text-end fw-bold text-uppercase">
                                             UTILIDAD
                                         </td>
-
                                         <td class="text-end fw-bold"
                                             :class="utilidad >= 0 ? 'text-success' : 'text-danger'">
-
-                                            $ @{{ Number(utilidad).toLocaleString() }}
-
+                                            $ @{{ Number(utilidad).toLocaleString('es-CO') }}
                                         </td>
                                     </tr>
 
-
                                     <tr>
-                                        <td colspan="3" class="text-end fw-semibold text-muted">
+                                        <td colspan="4" class="text-end fw-semibold text-muted">
                                             MARGEN %
                                         </td>
-
                                         <td class="text-end fw-bold"
                                             :class="porcentajeUtilidad >= 0 ? 'text-success' : 'text-danger'">
-
                                             @{{ porcentajeUtilidad }} %
-
                                         </td>
                                     </tr>
 
@@ -727,6 +745,71 @@
         </div>
         <!-- FIN Modal para asignar instaladores a la OT -->
 
+        <!-- Modal para programar la OT -->
+        <div v-if="mostrarProgramacion" class="modal fade show d-block" tabindex="-1"
+            style="background: rgba(0,0,0,0.6);">
+
+            <div class="modal-dialog modal-md modal-dialog-centered">
+                <div class="modal-content shadow-lg border-0">
+
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title">
+                            @if ($isInstalador)
+                                Programar OT
+                            @else
+                                Programación OT
+                            @endif
+                        </h5>
+
+                        <button type="button" class="btn-close btn-close-white" @click="mostrarProgramacion = false">
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+
+                        <div class="mb-3">
+                            <label class="form-label">Fecha Programada</label>
+
+                            <input type="date" v-model="formProgramacion.fecha_programada" class="form-control"
+                                :readonly="{{ $isAsesor ? 'true' : 'false' }}">
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Fecha Estimada Finalización</label>
+
+                            <input type="date" v-model="formProgramacion.fecha_programada_fin" class="form-control"
+                                :readonly="{{ $isAsesor ? 'true' : 'false' }}">
+                        </div>
+
+                        <div>
+                            <label class="form-label">Observaciones</label>
+
+                            <textarea v-model="formProgramacion.observacion_programacion" class="form-control" rows="3"
+                                :readonly="{{ $isAsesor ? 'true' : 'false' }}">
+                    </textarea>
+                        </div>
+
+                    </div>
+
+                    <div class="modal-footer">
+
+                        <button class="btn btn-secondary" @click="mostrarProgramacion = false">
+                            Cerrar
+                        </button>
+
+                        @if ($isInstalador)
+                            <button class="btn btn-dark" @click="guardarProgramacion">
+                                Guardar
+                            </button>
+                        @endif
+
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        <!-- FIN Modal para programar la OT -->
+
 
 
 
@@ -791,6 +874,14 @@
                         },
                         porcentajeUtilidad: 0,
 
+                        mostrarProgramacion: false,
+                        formProgramacion: {
+                            id_work_order: null,
+                            fecha_programada: "",
+                            fecha_programada_fin: "",
+                            observacion_programacion: ""
+                        },
+
                     }
                 },
 
@@ -853,19 +944,16 @@
                         return this.otSeleccionada?.pd_servicio ?? '';
                     },
 
-
-
-
                     pedidoGlobal() {
                         const ot = this.workOrders.find(w => w.id_work_order === this.selectedWorkOrderId);
                         if (!ot) return [];
-                        return this.pedidoHgi.filter(p => p.pedido == ot.pedido);
+                        return this.pedidoHgiAgrupado.filter(p => p.pedido == ot.pedido);
                     },
 
                     pedidoServicio() {
                         const ot = this.workOrders.find(w => w.id_work_order === this.selectedWorkOrderId);
                         if (!ot) return [];
-                        return this.pedidoHgi.filter(p => p.pedido != ot.pedido);
+                        return this.pedidoHgiAgrupado.filter(p => p.pedido != ot.pedido);
                     },
 
                     totalGlobal() {
@@ -898,34 +986,24 @@
 
                         this.pedidoHgi.forEach(p => {
 
-                            const cantidad = parseFloat(p.cantidad) || 0;
-                            const subtotal = parseFloat(p.subtotal) || 0;
-                            const descuento = parseFloat(p.valor_descuento) || 0;
-                            const total = parseFloat(p.total_con_descuento) || 0;
+                            const key = `${p.pedido}_${p.codigo_producto}`;
 
-                            if (!mapa[p.codigo_producto]) {
-
-                                mapa[p.codigo_producto] = {
+                            if (!mapa[key]) {
+                                mapa[key] = {
                                     ...p,
-                                    cantidad,
-                                    subtotal,
-                                    valor_descuento: descuento,
-                                    total_con_descuento: total
+                                    cantidad: parseFloat(p.cantidad) || 0,
+                                    subtotal: parseFloat(p.subtotal) || 0,
+                                    valor_descuento: parseFloat(p.valor_descuento) || 0,
+                                    total_con_descuento: parseFloat(p.total_con_descuento) || 0
                                 };
-
-                            } else {
-
-                                mapa[p.codigo_producto].cantidad += cantidad;
-                                mapa[p.codigo_producto].subtotal += subtotal;
-                                mapa[p.codigo_producto].valor_descuento += descuento;
-                                mapa[p.codigo_producto].total_con_descuento += total;
-
                             }
 
                         });
 
                         return Object.values(mapa);
                     }
+
+
                 },
 
                 methods: {
@@ -952,6 +1030,118 @@
                         return t.includes(s) ? "" : "display:none;";
                     },
 
+
+
+                    abrirModalProgramacion(workOrder) {
+
+                        this.formProgramacion = {
+                            id_work_order: workOrder.id_work_order,
+                            fecha_programada: workOrder.fecha_programada ?? "",
+                            fecha_programada_fin: workOrder.fecha_programada_fin ?? "",
+                            observacion_programacion: workOrder.observacion_programacion ?? ""
+                        };
+
+                        this.mostrarProgramacion = true;
+                    },
+
+                    async guardarProgramacion() {
+
+                        if (!this.formProgramacion.fecha_programada) {
+                            alert("Debe seleccionar fecha programada.");
+                            return;
+                        }
+
+                        const inicio = this.formProgramacion.fecha_programada;
+                        const fin = this.formProgramacion.fecha_programada_fin;
+
+                        if (!inicio) {
+                            this.pushToast('warning', 'Validación',
+                                'Debe seleccionar fecha programada.');
+                            return;
+                        }
+
+                        if (fin && fin < inicio) {
+                            this.pushToast(
+                                'danger',
+                                'Validación',
+                                'La fecha final no puede ser menor a la fecha inicial.'
+                            );
+                            return;
+                        }
+
+                        const resp = await fetch('/ordenes-trabajo/programar', {
+                            method: "POST",
+                            headers: {
+                                "Content-Type": "application/json",
+                                "X-CSRF-TOKEN": "{{ csrf_token() }}"
+                            },
+                            body: JSON.stringify(this.formProgramacion)
+                        });
+
+                        const json = await resp.json();
+
+                        if (!resp.ok || !json.success) {
+                            alert(json.message ?? "Error guardando programación.");
+                            return;
+                        }
+
+                        // ACTUALIZAR EN MEMORIA SIN RECARGAR
+                        const index = this.workOrders.findIndex(
+                            w => w.id_work_order === this.formProgramacion.id_work_order
+                        );
+
+                        if (index !== -1) {
+                            this.workOrders[index].fecha_programada =
+                                this.formProgramacion.fecha_programada;
+
+                            this.workOrders[index].fecha_programada_fin =
+                                this.formProgramacion.fecha_programada_fin;
+
+                            this.workOrders[index].observacion_programacion =
+                                this.formProgramacion.observacion_programacion;
+                        }
+
+                        this.mostrarProgramacion = false;
+
+                        this.pushToast(
+                            'success',
+                            'Programación actualizada',
+                            'La programación fue guardada correctamente.'
+                        );
+                    },
+
+
+                    async verProgramacionOT(workOrder) {
+
+                        try {
+
+                            const resp = await fetch(
+                                `/ordenes-trabajo/${workOrder.id_work_order}/programacion`);
+
+                            if (!resp.ok) {
+                                this.pushToast('danger', 'Error',
+                                'No se pudo obtener la programación.');
+                                return;
+                            }
+
+                            const data = await resp.json();
+
+                            this.formProgramacion = {
+                                id_work_order: data.id_work_order,
+                                fecha_programada: data.fecha_programada ?? "",
+                                fecha_programada_fin: data.fecha_programada_fin ?? "",
+                                observacion_programacion: data.observacion_programacion ?? ""
+                            };
+
+                            this.mostrarProgramacion = true;
+
+                        } catch (error) {
+
+                            this.pushToast('danger', 'Error', 'Error consultando programación.');
+                            console.error(error);
+
+                        }
+                    },
 
                     async iniciarOT(id) {
 
@@ -1164,68 +1354,67 @@
 
                     async exportarExcel(id) {
 
-    if (!id) {
-        this.pushToast(
-            'warning',
-            'Validación',
-            'No se encontró la orden.'
-        );
-        return;
-    }
+                        if (!id) {
+                            this.pushToast(
+                                'warning',
+                                'Validación',
+                                'No se encontró la orden.'
+                            );
+                            return;
+                        }
 
-    try {
+                        try {
 
-        const resp = await fetch(
-            `/ordenes-trabajo/${id}/exportar-financiero-excel`,
-            {
-                method: 'GET',
-                headers: {
-                    'X-Requested-With': 'XMLHttpRequest'
-                }
-            }
-        );
+                            const resp = await fetch(
+                                `/ordenes-trabajo/${id}/exportar-financiero-excel`, {
+                                    method: 'GET',
+                                    headers: {
+                                        'X-Requested-With': 'XMLHttpRequest'
+                                    }
+                                }
+                            );
 
-        // Si el backend devuelve error JSON
-        if (!resp.ok) {
-            const data = await resp.json();
-            this.pushToast(
-                'danger',
-                'Error al exportar',
-                data.message || 'No se pudo generar el archivo.'
-            );
-            return;
-        }
+                            // Si el backend devuelve error JSON
+                            if (!resp.ok) {
+                                const data = await resp.json();
+                                this.pushToast(
+                                    'danger',
+                                    'Error al exportar',
+                                    data.message || 'No se pudo generar el archivo.'
+                                );
+                                return;
+                            }
 
-        // Si es correcto → descargar archivo
-        const blob = await resp.blob();
-        const url = window.URL.createObjectURL(blob);
+                            // Si es correcto → descargar archivo
+                            const blob = await resp.blob();
+                            const url = window.URL.createObjectURL(blob);
 
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `OT_${id}_Resumen_Financiero.xlsx`;
-        document.body.appendChild(a);
-        a.click();
-        a.remove();
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `OT_${id}_Resumen_Financiero.xlsx`;
+                            document.body.appendChild(a);
+                            a.click();
+                            a.remove();
 
-        window.URL.revokeObjectURL(url);
+                            window.URL.revokeObjectURL(url);
 
-        this.pushToast(
-            'success',
-            'Exportación exitosa',
-            'El archivo fue generado correctamente.'
-        );
+                            this.pushToast(
+                                'success',
+                                'Exportación exitosa',
+                                'El archivo fue generado correctamente.'
+                            );
 
-    } catch (error) {
+                        } catch (error) {
 
-        this.pushToast(
-            'danger',
-            'Error inesperado',
-            'Ocurrió un problema generando el Excel.'
-        );
+                            this.pushToast(
+                                'danger',
+                                'Error inesperado',
+                                'Ocurrió un problema generando el Excel.'
+                            );
 
-        console.error(error);
-    }
-},
+                            console.error(error);
+                        }
+                    },
 
 
                     async abrirModalAsignacion(id) {

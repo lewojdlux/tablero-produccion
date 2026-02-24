@@ -34,11 +34,12 @@
                             data-principal='{{ $ordenTrabajo->instalador_id }}'
                             data-acompanantes='@json($ordenTrabajo->acompanantes->pluck('id_instalador'))'
                             data-perfil="{{ auth()->user()->perfil_usuario_id }}"
-                            data-ot-status="{{ $ordenTrabajo->status }}">
+                            data-ot-status="{{ $ordenTrabajo->status }}"
+                            data-fecha-inicio="{{ $ordenTrabajo->fecha_programada }}"
+                            data-fecha-fin="{{ $ordenTrabajo->fecha_programada_fin }}">
 
                             {{-- ALERTAS --}}
-                            <div v-if="alert.show"
-                                class="alert alert-dismissible fade show"
+                            <div v-if="alert.show" class="alert alert-dismissible fade show"
                                 :class="{
                                     'alert-success': alert.type === 'success',
                                     'alert-danger': alert.type === 'error',
@@ -48,9 +49,7 @@
 
                                 @{{ alert.message }}
 
-                                <button type="button"
-                                        class="btn-close"
-                                        @click="alert.show = false">
+                                <button type="button" class="btn-close" @click="alert.show = false">
                                 </button>
                             </div>
 
@@ -74,7 +73,6 @@
 
                                         <tbody>
                                             <tr v-for="(j, i) in jornadasRegistradas" :key="j.id"
-
                                                 class="text-center">
 
                                                 <td>@{{ j.fecha }}</td>
@@ -120,7 +118,7 @@
                             </div>
 
                             {{-- FORM NUEVA JORNADA --}}
-                            <form @submit.prevent="submit" v-if="!otFinalizada">
+                            <form @submit.prevent="submit" v-if="otAbierta && puedeRegistrarMasJornadas">
 
                                 <h5 class="fw-bold mb-4">Registrar nueva jornada</h5>
 
@@ -143,7 +141,8 @@
 
                                             <div class="col-md-4">
                                                 <label class="form-label fw-semibold">Fecha</label>
-                                                <input type="date" class="form-control" v-model="j.fecha" required
+                                                <input type="date" class="form-control" v-model="j.fecha"
+                                                    :min="fechaInicioProgramada" :max="fechaFinProgramada" required
                                                     readonly>
                                             </div>
 
@@ -154,7 +153,7 @@
 
                                             <div class="col-md-4">
                                                 <label class="form-label fw-semibold">Hora fin</label>
-                                                <input type="time" class="form-control" v-model="j.hora_fin" required>
+                                                <input type="time" class="form-control" v-model="j.hora_fin">
                                             </div>
 
                                             {{-- INSTALADORES COMO CHECKBOXES --}}
@@ -196,35 +195,94 @@
                                     </div>
                                 </div>
 
-                                {{-- DESCRIPCIÓN GENERAL --}}
-                                <div class="mb-4">
-                                    <label class="form-label fw-semibold">
-                                        Descripción general / Novedades
-                                    </label>
-                                    <textarea class="form-control" rows="4" v-model="installationNotes"></textarea>
-                                </div>
-
-                                {{-- BOTONES --}}
-                                <div class="d-flex justify-content-end gap-3">
-                                    <a href="{{ route('ordenes.trabajo.asignados') }}" class="btn btn-outline-secondary">
-                                        Cancelar
-                                    </a>
+                            </form>
 
 
 
-                                    <button class="btn btn-success">
+                            <!-- DESCRIPCIÓN GENERAL (SIEMPRE VISIBLE SI OT ABIERTA) -->
+                            <div v-if="otAbierta" class="mt-4">
+                                <label class="form-label fw-semibold">
+                                    Descripción general / Novedades
+                                </label>
+                                <textarea class="form-control" rows="4" v-model="installationNotes"></textarea>
+                            </div>
+
+                            <!-- ACCIONES GENERALES -->
+                            <div v-if="otAbierta"
+                                class="d-flex justify-content-between mt-4">
+
+                                <!-- IZQUIERDA -->
+                                <a href="{{ route('ordenes.trabajo.asignados') }}"
+                                class="btn btn-outline-secondary">
+                                    Cancelar
+                                </a>
+
+                                <!-- DERECHA -->
+                                <div class="d-flex gap-2">
+
+                                    <!-- Guardar jornada SOLO si puede -->
+                                    <button v-if="puedeRegistrarMasJornadas"
+                                            class="btn btn-success"
+                                            @click="submit">
                                         Guardar jornada
                                     </button>
 
-                                    <button type="button" class="btn btn-danger" @click="finalizarOT">
+                                    <!-- Finalizar siempre visible -->
+                                    <button type="button"
+                                            class="btn btn-danger"
+                                            @click="finalizarOT">
                                         Finalizar OT
                                     </button>
+
                                 </div>
+                            </div>
 
-                            </form>
+                            <div v-if="otAbierta && !puedeRegistrarMasJornadas" class="alert alert-info mt-3">
+                                Ya se alcanzó la fecha final programada. No se pueden registrar más jornadas.
+                            </div>
 
-                            <div v-else class="alert alert-success mt-4">
-                                Esta orden de trabajo ya fue finalizada.
+
+                            <!-- MODAL JORNADA PENDIENTE -->
+                            <div v-if="mostrarModalPendiente" class="modal fade show d-block"
+                                style="background: rgba(0,0,0,0.7);">
+
+                                <div class="modal-dialog modal-md modal-dialog-centered">
+                                    <div class="modal-content border-0 shadow-lg">
+
+                                        <div class="modal-header bg-danger text-white">
+                                            <h5 class="modal-title">
+                                                Jornada pendiente sin finalizar
+                                            </h5>
+                                        </div>
+
+                                        <div class="modal-body">
+
+                                            <p>
+                                                No finalizaste la jornada del día
+                                                <strong>@{{ jornadaPendiente.fecha }}</strong>.
+                                            </p>
+
+                                            <div class="mb-3">
+                                                <label class="form-label fw-bold">
+                                                    Ingrese hora final
+                                                </label>
+
+                                                <input type="time" class="form-control"
+                                                    v-model="jornadaPendiente.hora_fin">
+                                            </div>
+
+                                        </div>
+
+                                        <div class="modal-footer">
+
+                                            <button class="btn btn-danger" @click="guardarHoraPendiente">
+                                                Guardar y continuar
+                                            </button>
+
+                                        </div>
+
+                                    </div>
+                                </div>
                             </div>
 
                         </div>
@@ -245,7 +303,8 @@
         const {
             createApp,
             ref,
-            onMounted
+            onMounted,
+            computed
         } = Vue;
 
         createApp({
@@ -262,10 +321,54 @@
                 const perfil = Number(el.dataset.perfil);
                 const otStatus = el.dataset.otStatus;
 
+                const fechaInicioProgramada = el.dataset.fechaInicio;
+                const fechaFinProgramada = el.dataset.fechaFin;
+                const jornadasRegistradas = ref([]);
+                const jornadas = ref([]);
+
+                const puedeRegistrarMasJornadas = computed(() => {
+
+                    if (!jornadasRegistradas.value.length) {
+                        return true;
+                    }
+
+                    const ordenadas = [...jornadasRegistradas.value]
+                        .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+                    const ultimaFecha = ordenadas[0].fecha;
+
+                    return ultimaFecha < fechaFinProgramada;
+                });
+
+
+                function calcularFechaSiguiente() {
+                    let fechaDefault = fechaInicioProgramada;
+
+                    if (jornadasRegistradas.value.length > 0) {
+
+                        const ordenadas = [...jornadasRegistradas.value]
+                            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+                        const ultimaFecha = ordenadas[0].fecha;
+
+                        const siguiente = new Date(ultimaFecha);
+                        siguiente.setDate(siguiente.getDate() + 1);
+
+                        fechaDefault = siguiente.toISOString().split('T')[0];
+
+                        if (fechaDefault > fechaFinProgramada) {
+                            fechaDefault = fechaFinProgramada;
+                        }
+                    }
+
+                    return fechaDefault;
+                }
+
+                const mostrarModalPendiente = ref(false);
+                const jornadaPendiente = ref(null);
+
                 const esAdmin = perfil === 1 || perfil === 2;
                 const otAbierta = otStatus !== 'completed';
-
-                const hoy = new Date().toISOString().split('T')[0];
 
 
                 const alert = ref({
@@ -274,17 +377,10 @@
                     message: ''
                 });
 
-                const jornadasRegistradas = ref([]);
-                const jornadas = ref([{
-                    fecha: hoy,
-                    hora_inicio: '',
-                    hora_fin: '',
-                    observaciones: '',
-                    instaladores: [...acompanantes]
-                }]);
 
                 const installationNotes = ref('');
-                const otFinalizada = ref(false);
+                // const otFinalizada = ref(false);
+                const otFinalizada = ref(otStatus === 'completed');
                 const instaladores = ref(JSON.parse(el.dataset.instaladores));
 
 
@@ -292,6 +388,31 @@
                     const res = await axios.get(getUrl);
                     jornadasRegistradas.value = res.data;
                 }
+
+                async function verificarJornadaPendiente() {
+
+                    const res = await axios.get(
+                        `/ordenes-trabajo/${el.dataset.ordenId}/jornada-pendiente`
+                    );
+
+                    if (res.data.pendiente) {
+                        jornadaPendiente.value = res.data.jornada;
+                        mostrarModalPendiente.value = true;
+                    }
+                }
+
+                onMounted(async () => {
+                    await cargarJornadas();
+                    jornadas.value = [{
+                        fecha: calcularFechaSiguiente(),
+                        hora_inicio: '',
+                        hora_fin: '',
+                        observaciones: '',
+                        instaladores: [principal, ...acompanantes]
+                    }];
+
+                    await verificarJornadaPendiente();
+                });
 
 
                 function showAlert(type, message) {
@@ -311,18 +432,18 @@
 
                     for (const j of jornadas.value) {
 
-                        if (!j.hora_inicio || !j.hora_fin) {
-                            showAlert('warning', 'Debe ingresar hora inicio y hora fin');
+                        if (j.fecha < fechaInicioProgramada) {
+                            showAlert('warning', 'La fecha no puede ser menor a la fecha programada.');
                             return;
                         }
 
-                        if (j.hora_inicio >= j.hora_fin) {
-                          
-                            showAlert('warning', 'La hora final debe ser mayor que la inicial.');
+                        if (j.fecha > fechaFinProgramada) {
+                            showAlert('warning', 'La fecha no puede superar la fecha final programada.');
                             return;
                         }
                     }
-           
+
+
                     try {
                         const res = await axios.post(
                             postUrl, {
@@ -335,9 +456,11 @@
                         );
 
                         await cargarJornadas();
+                        await verificarJornadaPendiente();
+
 
                         jornadas.value = [{
-                            fecha: hoy,
+                            fecha: calcularFechaSiguiente(),
                             hora_inicio: '',
                             hora_fin: '',
                             observaciones: '',
@@ -348,14 +471,14 @@
                         showAlert('success', res.data.message);
 
                     } catch (e) {
-                       
+
                         showAlert('error', e.response?.data?.message || 'Error al guardar la jornada');
                     }
                 }
 
                 async function finalizarOT() {
                     if (!installationNotes.value) {
-                       
+
                         showAlert('warning', 'Debe ingresar la descripción general.');
                         return;
                     }
@@ -382,7 +505,7 @@
                         }, 1500);
 
                     } catch (e) {
-                      
+
 
                         showAlert('error', e.response?.data?.message || 'Error al finalizar la OT');
                     }
@@ -392,8 +515,8 @@
                 async function actualizarJornada(j) {
 
 
-                    if (j.hora_inicio >= j.hora_fin) {
-                       
+                    if (j.hora_fin && j.hora_inicio >= j.hora_fin) {
+
                         showAlert('warning', 'La hora final debe ser mayor que la inicial.');
                         return;
                     }
@@ -411,13 +534,13 @@
                             }
                         );
                         showAlert('success', res.data.message);
-                      
+
 
                         await cargarJornadas();
 
                     } catch (e) {
                         showAlert('error', e.response?.data?.message || 'Error al actualizar la jornada');
-                       
+
                     }
                 }
 
@@ -428,8 +551,7 @@
 
                     try {
                         const res = await axios.delete(
-                            `/ordenes-trabajo/jornadas/${id}`,
-                            {
+                            `/ordenes-trabajo/jornadas/${id}`, {
                                 headers: {
                                     'X-CSRF-TOKEN': csrfToken
                                 }
@@ -437,7 +559,7 @@
                         );
 
                         showAlert('success', res.data.message);
-                 
+
 
                         await cargarJornadas();
 
@@ -447,7 +569,45 @@
                 }
 
 
-                onMounted(cargarJornadas);
+                async function guardarHoraPendiente() {
+
+                    if (!jornadaPendiente.value.hora_fin) {
+                        showAlert('warning', 'Debe ingresar hora final.');
+                        return;
+                    }
+
+                    if (jornadaPendiente.value.hora_fin <= jornadaPendiente.value.hora_inicio) {
+                        showAlert('warning', 'La hora final debe ser mayor.');
+                        return;
+                    }
+
+                    try {
+
+                        await axios.put(
+                            `/ordenes-trabajo/jornadas/${jornadaPendiente.value.id}`, {
+                                hora_inicio: jornadaPendiente.value.hora_inicio,
+                                hora_fin: jornadaPendiente.value.hora_fin
+                            }, {
+                                headers: {
+                                    'X-CSRF-TOKEN': csrfToken
+                                }
+                            }
+                        );
+
+                        mostrarModalPendiente.value = false;
+                        jornadaPendiente.value = null;
+
+                        await cargarJornadas();
+
+                        showAlert('success', 'Jornada completada correctamente.');
+
+                    } catch (e) {
+                        showAlert('error', 'Error al guardar.');
+                    }
+                }
+
+
+
 
                 return {
                     jornadasRegistradas,
@@ -463,6 +623,12 @@
                     otAbierta,
                     actualizarJornada,
                     eliminarJornada,
+                    mostrarModalPendiente,
+                    jornadaPendiente,
+                    guardarHoraPendiente,
+                    fechaInicioProgramada,
+                    fechaFinProgramada,
+                    puedeRegistrarMasJornadas,
                 };
             }
         }).mount('#finalizarOT');

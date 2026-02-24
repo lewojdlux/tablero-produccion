@@ -1,19 +1,19 @@
 <?php
 
-
 namespace App\Services;
 
+use App\Models\OrderWorkModel;
 use Exception;
 
 use App\Repository\OrderWorkRepository;
 use App\Repository\ProductionRepository;
 
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
 class OrderWorkService
 {
-
     protected OrderWorkRepository $orderWorkRepository;
     protected ProductionRepository $productionRepository;
 
@@ -30,18 +30,48 @@ class OrderWorkService
         return $this->orderWorkRepository->getAllOrders();
     }
 
-    public function getOrdenesTrabajo(  $search = null, $vendorId = null)
+    // función para traer los PD de HGI
+    public function getOrdenesTrabajo($search = null, $vendorId = null)
     {
         // Lógica para crear una nueva orden de trabajo
         return $this->productionRepository->getOrdenesTrabajo($search, $vendorId);
     }
 
-   
-
+    // función para crear una nueva orden de trabajo
     public function createOrderWork(array $data)
     {
-        // Lógica para crear una nueva orden de trabajo
-        return $this->orderWorkRepository->createOrderWork($data);
+        // Validar PD
+        /*$pdValido = $this->orderWorkRepository->getPedidoHgiExistente([
+            'pd_servicio' => $data['pd_servicio'] ?? null,
+            'vendedor_username' => $data['vendedor_username'] ?? null,
+            'tercero_id' => $data['tercero_id'] ?? null,
+        ]);
+
+        if (!$pdValido) {
+            throw new \Exception('El PD de servicio no corresponde al cliente o asesor.');
+        }*/
+
+        // 🛡 Validar que no exista OT
+        if ($this->orderWorkRepository->existePorDocumento($data['n_documento'])) {
+            throw new \Exception('La orden ya está registrada.');
+        }
+
+        return $this->orderWorkRepository->createOrderWork([
+            'n_documento' => $data['n_documento'],
+            'pedido' => $data['n_documento'],
+            'tercero' => $data['tercero'],
+            'vendedor' => $data['vendedor'],
+            'codigo_asesor' => $data['vendedor_username'],
+            'instalador_id' => null,
+            'pd_servicio' => $data['pd_servicio'] ?? null,
+            'periodo' => $data['periodo'],
+            'ano' => $data['ano'],
+            'estado_factura' => $data['status'],
+            'n_factura' => $data['n_factura'],
+            'status' => $data['status'],
+            'description' => $data['obsv_pedido'],
+            'usereg_ot' => Auth::user()->id,
+        ]);
     }
 
     /* función para obtener las órdenes de trabajo asignadas */
@@ -68,6 +98,22 @@ class OrderWorkService
         return $this->orderWorkRepository->getCostoActualProducto($workOrderId);
     }
 
+    public function programarOT(array $data)
+    {
+        $ot = OrderWorkModel::findOrFail($data['id_work_order']);
+
+        if ($ot->status === 'completed') {
+            throw new \Exception('No se puede programar una OT finalizada.');
+        }
+
+        $ot->fecha_programada = $data['fecha_programada'];
+        $ot->fecha_programada_fin = $data['fecha_programada_fin'];
+        $ot->observacion_programacion = $data['observacion_programacion'];
+        $ot->save();
+
+        return $ot;
+    }
+
     // función para iniciar una orden de trabajo
     public function iniciarOrdenTrabajo(int $id): void
     {
@@ -75,26 +121,17 @@ class OrderWorkService
 
         //  Validación 1: Debe tener instalador principal
         if (empty($workOrder->instalador_id)) {
-            throw new Exception(
-                'Debe asignar un instalador principal antes de iniciar la OT.',
-                422
-            );
+            throw new Exception('Debe asignar un instalador principal antes de iniciar la OT.', 422);
         }
 
         //  Validación 2: No debe estar ya iniciada
         if ($workOrder->status === 'in_progress') {
-            throw new Exception(
-                'La orden ya está iniciada.',
-                422
-            );
+            throw new Exception('La orden ya está iniciada.', 422);
         }
 
         //  Validación 3: No debe estar finalizada
         if ($workOrder->status === 'completed') {
-            throw new Exception(
-                'No puede iniciar una orden finalizada.',
-                422
-            );
+            throw new Exception('No puede iniciar una orden finalizada.', 422);
         }
 
         $workOrder->status = 'in_progress';
@@ -103,68 +140,73 @@ class OrderWorkService
     }
 
     // función para finalizar una orden de trabajo
-    public function finalizarOT(
-        int $id,
-        string $finishedAt,
-        string $notes,
-        int $userId
-    ): void {
-
+    public function finalizarOT(int $id, string $finishedAt, string $notes, int $userId): void
+    {
         $ot = $this->orderWorkRepository->findOrFail($id);
 
         if ($ot->status !== 'in_progress') {
             throw new \Exception('La orden de trabajo no está en ejecución');
         }
 
-        $fin    = Carbon::parse($finishedAt);
-
-
+        $fin = Carbon::parse($finishedAt);
 
         $this->orderWorkRepository->updateById($id, [
-            'finished_at'         => $fin,
-            'installation_notes'  => $notes,
-            'usuario_finalizacion'=> $userId,
-            'fechafinalizacion'   => $fin,
-            'status'              => 'completed',
+            'finished_at' => $fin,
+            'installation_notes' => $notes,
+            'usuario_finalizacion' => $userId,
+            'fechafinalizacion' => $fin,
+            'status' => 'completed',
         ]);
     }
 
     // función para marcar una orden de trabajo como en proceso
-    public function registrarJornadas(
-        int $ordenTrabajoId,
-        array $jornadas,
-        int $userId
-    ): void
+    public function registrarJornadas(int $ordenTrabajoId, array $jornadas, int $userId): void
     {
         DB::transaction(function () use ($ordenTrabajoId, $jornadas, $userId) {
+            $ot = DB::table('work_orders')->where('id_work_order', $ordenTrabajoId)->first();
 
-            //  Obtener último número de jornada
-            $ultima = DB::table('orden_trabajo_jornadas')
-                ->where('orden_trabajo_id', $ordenTrabajoId)
-                ->max('numero_jornada');
+            if (!$ot) {
+                throw new \Exception('Orden de trabajo no encontrada.');
+            }
 
-            $consecutivoBase = $ultima ?? 0;
+            if (!$ot->fecha_programada || !$ot->fecha_programada_fin) {
+                throw new \Exception('La orden no tiene fechas programadas.');
+            }
+
+            $consecutivoBase = DB::table('orden_trabajo_jornadas')->where('orden_trabajo_id', $ordenTrabajoId)->count();
 
             foreach ($jornadas as $index => $jornada) {
-
-                $inicio = Carbon::parse($jornada['fecha'].' '.$jornada['hora_inicio']);
-                $fin    = Carbon::parse($jornada['fecha'].' '.$jornada['hora_fin']);
-
-                if ($fin->lte($inicio)) {
-                    throw new \Exception('La hora final debe ser mayor a la hora inicial.');
+                // VALIDAR RANGO FECHAS
+                if ($jornada['fecha'] < $ot->fecha_programada) {
+                    throw new \Exception('La fecha es menor a la fecha programada.');
                 }
 
-                //  AQUÍ VA LA VALIDACIÓN DE DUPLICADO
-                $existe = DB::table('orden_trabajo_jornadas')
-                    ->where('orden_trabajo_id', $ordenTrabajoId)
-                    ->whereDate('fecha', $jornada['fecha'])
-                    ->exists();
+                if ($jornada['fecha'] > $ot->fecha_programada_fin) {
+                    throw new \Exception('La fecha supera la fecha final programada.');
+                }
+
+                // VALIDAR DUPLICADO POR FECHA
+                $existe = DB::table('orden_trabajo_jornadas')->where('orden_trabajo_id', $ordenTrabajoId)->whereDate('fecha', $jornada['fecha'])->exists();
 
                 if ($existe) {
                     throw new \Exception('Ya existe una jornada registrada para esta fecha.');
                 }
 
-                //  Calcular número de jornada
+                $inicio = Carbon::parse($jornada['fecha'] . ' ' . $jornada['hora_inicio']);
+
+                $fin = null;
+                $horasTrabajadas = null;
+
+                if (!empty($jornada['hora_fin'])) {
+                    $fin = Carbon::parse($jornada['fecha'] . ' ' . $jornada['hora_fin']);
+
+                    if ($fin->lte($inicio)) {
+                        throw new \Exception('La hora final debe ser mayor a la hora inicial.');
+                    }
+
+                    $horasTrabajadas = round($inicio->diffInMinutes($fin) / 60, 2);
+                }
+
                 $numeroJornada = $consecutivoBase + $index + 1;
 
                 $instaladores = $jornada['instaladores'] ?? [];
@@ -175,19 +217,18 @@ class OrderWorkService
 
                 $this->orderWorkRepository->crearJornada([
                     'orden_trabajo_id' => $ordenTrabajoId,
-                    'numero_jornada'   => $numeroJornada, // 
-                    'acompanante_ot'   =>  !empty($instaladores) ? $instaladores : null,
-                    'fecha'            => $jornada['fecha'],
-                    'hora_inicio'      => $jornada['hora_inicio'],
-                    'hora_fin'         => $jornada['hora_fin'],
-                    'horas_trabajadas' => round($inicio->diffInMinutes($fin) / 60, 2),
-                    'observaciones'    => $jornada['observaciones'] ?? null,
-                    'user_otj'         => $userId,
+                    'numero_jornada' => $numeroJornada,
+                    'acompanante_ot' => !empty($instaladores) ? $instaladores : null,
+                    'fecha' => $jornada['fecha'],
+                    'hora_inicio' => $jornada['hora_inicio'],
+                    'hora_fin' => $jornada['hora_fin'] ?? null,
+                    'horas_trabajadas' => $horasTrabajadas,
+                    'observaciones' => $jornada['observaciones'] ?? null,
+                    'user_otj' => $userId,
                 ]);
             }
         });
     }
-
 
     // función para obtener el material de una orden de trabajo por ID
     public function getPedidoHgiPorOT(int $workOrderId)
@@ -196,34 +237,22 @@ class OrderWorkService
     }
 
     /*  función para asignar instaladores a una orden de trabajo */
-    public function asignarInstaladores(
-        int $workOrderId,
-        int $principal,
-        array $acompanantes = []
-    ): void {
-
+    public function asignarInstaladores(int $workOrderId, int $principal, array $acompanantes = []): void
+    {
         $ot = $this->orderWorkRepository->findById($workOrderId);
 
         // 🔹 Normalizar acompañantes
-        $acompanantesLimpios = collect($acompanantes)
-            ->map(fn($id) => (int) $id)
-            ->filter(fn($id) => $id !== $principal)
-            ->unique()
-            ->values()
-            ->toArray();
+        $acompanantesLimpios = collect($acompanantes)->map(fn($id) => (int) $id)->filter(fn($id) => $id !== $principal)->unique()->values()->toArray();
 
         DB::transaction(function () use ($ot, $principal, $acompanantesLimpios) {
-
             // Guardar principal
             $ot->instalador_id = $principal;
             $ot->save();
 
             // Sincronizar acompañantes
             $ot->acompanantes()->sync($acompanantesLimpios);
-
         });
     }
-
 
     // función para obtener el resumen final de una orden de trabajo
     public function obtenerResumenFinal(int $id): array
@@ -234,14 +263,70 @@ class OrderWorkService
             throw new Exception('La orden no está finalizada.');
         }
 
-        $manoObra = $this->orderWorkRepository->getManoObra($id);
-        $materiales = $this->orderWorkRepository->getMateriales($id);
+        $registros = $this->orderWorkRepository->getManoObra($id);
+
+        $detalle = collect();
+
+        foreach ($registros as $r) {
+
+            if (!$r->hora_inicio || !$r->hora_fin) continue;
+
+            $calculo = app(\App\Services\CalculoManoObraService::class)
+                ->calcularPagoJornada(
+                    $r->fecha,
+                    $r->hora_inicio,
+                    $r->hora_fin,
+                    $r->valor_hora
+                );
+
+            foreach ($calculo as $c) {
+                if ($c['horas'] > 0) {
+                    $detalle->push([
+                        'nombre_instalador' => $r->nombre_instalador,
+                        'tipo' => $c['tipo'],
+                        'horas' => $c['horas'],
+                        'valor_hora' => $c['valor_hora'],
+                        'total' => $c['total'],
+                    ]);
+                }
+            }
+        }
+
+        $manoObra = $detalle
+            ->groupBy(fn($item) => $item['nombre_instalador'].'_'.$item['tipo'])
+            ->map(function ($items) {
+                return (object)[
+                    'nombre_instalador' => $items->first()['nombre_instalador'],
+                    'tipo' => $items->first()['tipo'],
+                    'horas' => round($items->sum('horas'), 2),
+                    'valor_hora' => $items->first()['valor_hora'],
+                    'total' => round($items->sum('total'), 2),
+                ];
+            })
+            ->values();
+
+        $manoObraTotal = $manoObra->sum('total');
+
+        $materiales = $this->orderWorkRepository->getMateriales($id)
+            ->map(function ($m) {
+
+                $cantidad = (float) ($m->cantidad ?? 0);
+                $costo    = (float) ($m->ultimo_costo ?? 0);
+
+                $m->cantidad = $cantidad;
+                $m->ultimo_costo = $costo;
+                $m->total = round($cantidad * $costo, 2);
+
+                return $m;
+            });
+
+        $solicitudTotal =  $materiales->sum('total') ?? 0;
+
+
+
         $servicios = $this->orderWorkRepository->getServicios($ordenTrabajo->pd_servicio);
 
-        //  LÓGICA DE NEGOCIO AQUÍ
-        $manoObraTotal = (float) $manoObra->sum('total');
-        $solicitudTotal = (float) $materiales->sum('ultimo_costo');
-        $pedidoTotal = (float) $servicios->sum('total');
+        $pedidoTotal = $servicios->sum('total') ?? 0;
 
         $utilidad = $pedidoTotal - $manoObraTotal - $solicitudTotal;
 
@@ -260,5 +345,11 @@ class OrderWorkService
             'utilidad',
             'porcentajeUtilidad'
         );
+    }
+
+    // función para obtener el PD de servicio existente
+    public function getPedidoHgiExistente(array $data)
+    {
+        return $this->orderWorkRepository->getPedidoHgiExistente($data);
     }
 }

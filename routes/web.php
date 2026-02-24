@@ -136,6 +136,8 @@ Route::middleware(['auth', 'perfil:1,2,5,6'])
         Route::get('/ordenes-trabajo/{id}/exportar-financiero-excel',[OrdenesTrabajoController::class,'exportarFinancieroExcel'])->name('workorders.export.financiero.excel');
 
 
+        Route::get('/ordenes-trabajo/{id}/programacion',[OrdenesTrabajoController::class, 'obtenerProgramacion']);
+
 
 });
 
@@ -253,6 +255,8 @@ Route::middleware(['auth', 'perfil:7'])
 
     Route::put('/ordenes-trabajo/jornadas/{id}',[OrdenesTrabajoController::class, 'actualizarJornada'])->name('workorders.jornada.update');
 
+    Route::get('/ordenes-trabajo/{id}/jornada-pendiente',[OrdenesTrabajoController::class, 'jornadaPendiente']);
+
 
     // Ver orden de trabajo finalizada
     Route::get('/ordenes-trabajo/finalizadas/{id}', [OrdenesTrabajoController::class, 'verOrdenFinalizada'])->name('workorders.finalizadas.show');
@@ -260,6 +264,9 @@ Route::middleware(['auth', 'perfil:7'])
 
     // Ver pedido HGI de una orden de trabajo
     Route::get('/ordenes-trabajo/{id}/pedido-hgi',[OrdenesTrabajoController::class, 'verPedidoMaterialHgi'])->name('workorders.hgi.pedido');
+
+
+    Route::post('/ordenes-trabajo/programar',[OrdenesTrabajoController::class, 'programar'])->middleware('auth');
 
 
     Route::get('/instaladores/listado', [InstaladorController::class, 'listado']);

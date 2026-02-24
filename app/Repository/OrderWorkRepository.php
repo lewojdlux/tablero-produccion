@@ -38,6 +38,15 @@ class OrderWorkRepository
     }
 
 
+    // función para verificar si una orden de trabajo existe por # de documento
+    public function existePorDocumento($documento)
+    {
+        return $this->orderWorkModel
+            ->where('n_documento', $documento)
+            ->exists();
+    }
+
+
     // función para obtener las órdenes de trabajo asignadas
     public function findById(int $id): OrderWorkModel
     {
@@ -51,7 +60,7 @@ class OrderWorkRepository
         return $orderWork->save();
     }
 
-    
+
     /*  funcion para obtener las órdenes de trabajo asignadas  */
     public function getOrderAsignados($vendorId = null)
     {
@@ -82,7 +91,11 @@ class OrderWorkRepository
                 return $this->orderWorkModel->whereRaw('1 = 0')->paginate(15);
             }
 
-            return $this->orderWorkModel->with('instalador', 'pedidosMateriales')->withCount('pedidosMateriales')->where('usereg_ot', $vendorId)->orderBy('status', 'desc')->paginate(15);
+            return $this->orderWorkModel->with('instalador', 'pedidosMateriales')
+            ->withCount('pedidosMateriales')
+            ->where('codigo_asesor', Auth::user()->identificador_asesor)
+            ->orderBy('status', 'desc')
+            ->paginate(15);
         }
 
         // Otros perfiles → ver todo
@@ -91,6 +104,8 @@ class OrderWorkRepository
         ->paginate(15);
     }
 
+
+    // función para obtener el material de una orden de trabajo por ID
     public function getPedidoHgiPorOT(int $pedidoId)
     {
         $ot = \App\Models\OrderWorkModel::findOrFail($pedidoId);
@@ -133,6 +148,7 @@ class OrderWorkRepository
                     - ISNULL(d.IntValorDescuento,0)
                 AS DECIMAL(18,2)) as total_con_descuento'),
             ])
+
             ->orderBy('d.IntDocumento')
             ->orderBy('p.StrLinea')
             ->get();
@@ -152,7 +168,7 @@ class OrderWorkRepository
     public function getMaterialsByMaterialName($materialName)
     {
         $sql = "
-            SELECT 
+            SELECT
                 p.StrIdProducto AS codigo,
                 p.StrDescripcion AS nombre,
                 p.StrParam1 AS ubicacion,
@@ -168,8 +184,8 @@ class OrderWorkRepository
                 ),0) AS saldo_inventario,
 
                 ISNULL((
-                    SELECT SUM(CASE 
-                            WHEN sp.IntSaldoFinal > 0 THEN sp.IntSaldoFinal 
+                    SELECT SUM(CASE
+                            WHEN sp.IntSaldoFinal > 0 THEN sp.IntSaldoFinal
                             ELSE 0
                         END)
                     FROM QrySaldoPedidos sp
@@ -192,8 +208,8 @@ class OrderWorkRepository
                     ),0)
                     -
                     ISNULL((
-                        SELECT SUM(CASE 
-                                WHEN sp.IntSaldoFinal > 0 THEN sp.IntSaldoFinal 
+                        SELECT SUM(CASE
+                                WHEN sp.IntSaldoFinal > 0 THEN sp.IntSaldoFinal
                                 ELSE 0
                             END)
                         FROM QrySaldoPedidos sp
@@ -219,26 +235,52 @@ class OrderWorkRepository
     // Función para obtener el costo actual de un producto
     public function getCostoActualProducto(string  $codigoProducto)
     {
-        $sql = "
-            SELECT TOP 1
-                SUM(IntValorFinal) as costo_unitario
-            FROM QrySaldosInvCosto3
-            WHERE IntBodega = '01'
-            AND IntAno = YEAR(GETDATE())
-            AND IntPeriodo = MONTH(GETDATE())
-            AND StrProducto = ?
-            GROUP BY IntEmpresa, IntAno, IntPeriodo, StrProducto, IntBodega
-        ";
+        /*
+            |--------------------------------------------------------------------------
+            |  Buscar última compra histórica (Transacción 131)
+            |--------------------------------------------------------------------------
+        */
 
-        $result = DB::connection('sqlsrv')->select($sql, [$codigoProducto]);
+        $compra = DB::connection('sqlsrv')
+            ->table('TblDetalleDocumentos as d')
+            ->join('TblDocumentos as t', 't.IntDocumento', '=', 'd.IntDocumento')
+            ->where('d.IntTransaccion', 131)
+            ->where('d.StrProducto', $codigoProducto)
+            ->orderByDesc('t.IntAno')
+            ->orderByDesc('t.IntPeriodo')
+            ->orderByDesc('t.IntDocumento') // último movimiento real
+            ->select('d.IntValorUnitario')
+            ->first();
 
-        return $result[0]->costo_unitario ?? 0;
+        if ($compra && $compra->IntValorUnitario > 0) {
+            return (float) $compra->IntValorUnitario;
+        }
+
+        /*
+            |--------------------------------------------------------------------------
+            |  Si nunca ha tenido compra → usar saldo actual
+            |--------------------------------------------------------------------------
+        */
+
+        $saldo = DB::connection('sqlsrv')
+            ->select("
+                SELECT TOP 1
+                    SUM(IntValorFinal) as costo_unitario
+                FROM QrySaldosInvCosto3
+                WHERE IntBodega = '01'
+                AND IntAno = YEAR(GETDATE())
+                AND IntPeriodo = MONTH(GETDATE())
+                AND StrProducto = ?
+                GROUP BY IntEmpresa, IntAno, IntPeriodo, StrProducto, IntBodega
+            ", [$codigoProducto]);
+
+        return (float) ($saldo[0]->costo_unitario ?? 0);
     }
 
 
     // función para obtener el producto por código
     public function getProductoByCodigo($codigo){
-        
+
     }
 
     // función para buscar materiales por nombre o código
@@ -258,7 +300,7 @@ class OrderWorkRepository
     {
         return $this->ordenTrabajoModel->create([
             'orden_trabajo_id'  => $data['orden_trabajo_id'],
-            'numero_jornada'    => $data['numero_jornada'], // 👈 obligatorio
+            'numero_jornada'    => $data['numero_jornada'], // obligatorio
             'fecha'             => $data['fecha'],
             'hora_inicio'       => $data['hora_inicio'],
             'hora_fin'          => $data['hora_fin'],
@@ -324,5 +366,22 @@ class OrderWorkRepository
                 (d.IntCantidad * d.IntValorUnitario) - ISNULL(d.IntValorDescuento,0) as total
             ")
             ->get();
+    }
+
+    // función para obtener el PD de servicio existente
+    public function getPedidoHgiExistente(array $data){
+        return DB::connection('sqlsrv')
+            ->table('TblDocumentos as t')
+            ->join('TblDetalleDocumentos as dd', 'dd.IntDocumento', '=', 't.IntDocumento')
+            ->join('TblProductos as p', 'p.StrIdProducto', '=', 'dd.StrProducto')
+            ->where('t.IntDocumento', $data['pd_servicio'])
+            ->where('t.StrDVendedor', $data['vendedor_username'])
+            ->where('t.StrTercero', $data['tercero_id'])
+            ->where('p.StrLinea', '40')
+            ->exists();
+
+        if (!$pdValido) {
+            throw new \Exception('El PD de servicio no corresponde al cliente o asesor.');
+        }
     }
 }
