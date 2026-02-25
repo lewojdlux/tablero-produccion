@@ -55,17 +55,35 @@ class SolicitudesController
     // ver y crear solicitud
     public function create($id)
     {
+
         $ordenTrabajo = OrderWorkModel::with('instalador')->findOrFail($id);
 
-        $pedidoMaterial = PedidoMaterialModel::where('orden_trabajo_id', $ordenTrabajo->id_work_order)->first();
+        // Todos los pedidos de la OT
+        $pedidos = PedidoMaterialModel::where(
+            'orden_trabajo_id',
+            $ordenTrabajo->id_work_order
+        )->get();
 
-        $solicitud = null;
+        //  IDs de esos pedidos
+        $pedidoIds = $pedidos->pluck('id_pedido_material');
 
-        if ($pedidoMaterial) {
-            $solicitud = SolicitudMaterialModel::where('pedido_material_id', $pedidoMaterial->id_pedido_material)->first();
-        }
+        //  Todos los items de TODOS los pedidos
+        $pedidoMaterialItem = PedidoMaterialItemModel::whereIn(
+            'pedido_material_id',
+            $pedidoIds
+        )->get();
 
-        return view('Solicitudes.crear', compact('ordenTrabajo', 'solicitud'));
+        //  Todas las solicitudes asociadas a esos pedidos
+        $solicitudes = SolicitudMaterialModel::whereIn(
+            'pedido_material_id',
+            $pedidoIds
+        )->get();
+
+        return view('Solicitudes.crear', compact(
+            'ordenTrabajo',
+            'pedidoMaterialItem',
+            'solicitudes'
+        ));
     }
 
     // Buscar
@@ -114,10 +132,10 @@ class SolicitudesController
             }
 
             // Eliminar materiales previamente asociados a la orden de trabajo para evitar duplicados
-            WorkOrdersMaterialsModel::where(
+            /* WorkOrdersMaterialsModel::where(
                 'work_order_id',
                 $ordenTrabajo->id_work_order
-            )->delete();
+            )->delete();*/
 
         
             //  Traer detalles del documento 131
@@ -129,7 +147,7 @@ class SolicitudesController
                 ->select([
                     'd.StrProducto',
                     'd.IntCantidad',
-                    'd.IntValorTotal',
+                    'd.IntValorUnitario',
                     'd.IntValorIva',
                     'p.StrDescripcion'
                 ])
@@ -143,7 +161,7 @@ class SolicitudesController
                     ],
                     [
                         'cantidad' => $item->IntCantidad,
-                        'ultimo_costo' => $item->IntValorTotal ?? 0,
+                        'ultimo_costo' => $item->IntValorUnitario ?? 0,
                     ],
                 );
             }

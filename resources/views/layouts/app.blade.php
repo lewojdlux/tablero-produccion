@@ -12,50 +12,140 @@
 
     {{-- Estilos base --}}
     <style>
-        :root { --sb-w: 0; }
-
-        @media (min-width: 768px) {
-            :root { --sb-w: 18rem; }
-            body.sidebar-closed { --sb-w: 0; }
-            body.sidebar-closed #app-sidebar { display: none !important; }
+        :root {
+            --sb-w: 0;
         }
 
-        #app-sidebar { width: var(--sb-w); }
+        @media (min-width: 768px) {
+            :root {
+                --sb-w: 18rem;
+            }
+
+            body.sidebar-closed {
+                --sb-w: 0;
+            }
+
+            body.sidebar-closed #app-sidebar {
+                display: none !important;
+            }
+        }
+
+        #app-sidebar {
+            width: var(--sb-w);
+        }
+
         #main-shell {
             padding-left: var(--sb-w);
             transition: padding-left .2s ease;
         }
 
-        /* Sidebar compacto */
+        /* ===================== SIDEBAR NEGRO ===================== */
+
+        #app-sidebar {
+            background: #1f2937 !important;
+            /* negro elegante */
+            border-right: 1px solid #111827 !important;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Logo */
+        #app-sidebar .border-b {
+            border-color: #374151 !important;
+        }
+
+        /* Scroll */
+        #app-sidebar nav {
+            overflow-y: auto;
+        }
+
+        /* Links base */
         #app-sidebar nav a,
         #app-sidebar nav button {
-            padding: .45rem .75rem !important;
+            padding: .6rem .9rem !important;
             font-size: .875rem;
+            border-radius: 6px;
+            color: #e5e7eb !important;
+            /* texto blanco */
+            background: transparent !important;
+            transition: all .2s ease;
+        }
+
+        /* Hover */
+        #app-sidebar nav a:hover,
+        #app-sidebar nav button:hover {
+            background: #374151 !important;
+            color: #ffffff !important;
+        }
+
+        /* Activo */
+        #app-sidebar nav a.bg-indigo-50,
+        #app-sidebar nav a.bg-indigo-100,
+        #app-sidebar nav button.bg-indigo-50 {
+            background: #111827 !important;
+            color: #ffffff !important;
+            font-weight: 600;
+        }
+
+        /* Submenú */
+        #app-sidebar nav .ml-6 {
+            border-left: 1px solid #374151;
+            margin-left: 12px !important;
+            padding-left: 12px;
         }
 
         #app-sidebar nav .ml-6 a {
-            padding: .35rem .75rem !important;
-            font-size: .8rem;
+            font-size: .82rem;
+            color: #cbd5e1 !important;
         }
 
-        #app-sidebar nav .space-y-1 > * {
-            margin-bottom: .15rem !important;
+        #app-sidebar nav .ml-6 a.bg-indigo-100 {
+            background: #0f172a !important;
+            color: #ffffff !important;
         }
 
-        #app-sidebar nav .uppercase {
+        /* Título sección */
+        #app-sidebar .uppercase {
+            color: #9ca3af !important;
             font-size: .65rem;
-            margin-bottom: .25rem;
+            letter-spacing: .08em;
         }
 
-        /* Scroll interno del menú */
-        #app-sidebar nav {
-            overflow-y: auto;
-            scrollbar-width: thin;
+        /* ===================== FOOTER USUARIO ===================== */
+
+        #app-sidebar>*:last-child {
+            margin-top: auto;
+            background: #111827 !important;
+            border-top: 1px solid #374151 !important;
+            padding: 16px;
         }
-        #app-sidebar nav::-webkit-scrollbar { width: 5px; }
-        #app-sidebar nav::-webkit-scrollbar-thumb {
-            background: #d1d5db;
-            border-radius: 10px;
+
+        #app-sidebar>*:last-child * {
+            color: #e5e7eb !important;
+        }
+
+        #app-sidebar>*:last-child small,
+        #app-sidebar>*:last-child p {
+            color: #9ca3af !important;
+        }
+
+        /* ===================== HEADER ===================== */
+
+        header {
+            background: #ffffff !important;
+            border-bottom: 1px solid #e5e7eb !important;
+        }
+
+        /* ===================== BODY ===================== */
+
+        body {
+            background: #f3f4f6 !important;
+        }
+
+        /* Card principal */
+        main section>div {
+            border-radius: 16px !important;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05) !important;
         }
     </style>
 
@@ -65,79 +155,75 @@
 
 <body class="min-h-screen bg-white text-zinc-900">
 
-@php
-    $perfil = (int) (auth()->user()->perfil_usuario_id ?? 0);
-    $isAdmin = in_array($perfil, [1,2], true);
-    $isAsesor = $perfil === 5;
-    $isInstalador = $perfil === 7;
-    $isAdminInstalador =  $perfil === 6;
+    @php
+        $perfil = (int) (auth()->user()->perfil_usuario_id ?? 0);
+        $isAdmin = in_array($perfil, [1, 2], true);
+        $isAsesor = $perfil === 5;
+        $isInstalador = $perfil === 7;
+        $isAdminInstalador = $perfil === 6;
 
-@endphp
+    @endphp
 
-{{-- SIDEBAR --}}
-<aside id="app-sidebar"
-       class="fixed inset-y-0 left-0 z-40 hidden md:flex md:flex-col
+    {{-- SIDEBAR --}}
+    <aside id="app-sidebar"
+        class="fixed inset-y-0 left-0 z-40 hidden md:flex md:flex-col
               w-72 border-r border-zinc-200 bg-white">
 
-    {{-- Logo --}}
-    <div class="h-16 flex items-center px-4 border-b">
-        <a href="{{ route('dashboard') }}" class="font-semibold">
-            {{ config('app.name') }}
-        </a>
-    </div>
+        {{-- Logo --}}
+        <div class="h-16 flex items-center px-4 border-b">
+            <a href="{{ route('dashboard') }}" class="font-semibold">
+                {{ config('app.name') }}
+            </a>
+        </div>
 
-    {{-- NAV --}}
-    <nav class="flex-1 p-3 space-y-1">
+        {{-- NAV --}}
+        <nav class="flex-1 p-3 space-y-1">
 
-        <div class="px-2 text-xs uppercase text-zinc-500">Menú</div>
+            <div class="px-2 text-xs uppercase text-zinc-500">Menú</div>
 
-        {{-- Dashboard --}}
-        <a href="{{ route('dashboard') }}"
-           class="block rounded-lg
+            {{-- Dashboard --}}
+            <a href="{{ route('dashboard') }}"
+                class="block rounded-lg
            {{ request()->routeIs('dashboard') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
-            Dashboard
-        </a>
+                Dashboard
+            </a>
 
 
-        @if ($isAdmin || $isInstalador || $isAdminInstalador || $isAsesor)
+            @if ($isAdmin || $isInstalador || $isAdminInstalador || $isAsesor)
+                {{-- Órdenes de trabajo --}}
+                @php $otActive = request()->routeIs('ordenes.trabajo.*'); @endphp
 
-            {{-- Órdenes de trabajo --}}
-            @php $otActive = request()->routeIs('ordenes.trabajo.*'); @endphp
-
-            <button type="button"
-                    onclick="toggleMenu('menu-ot')"
+                <button type="button" onclick="toggleMenu('menu-ot')"
                     class="w-full flex justify-between rounded-lg
                     {{ $otActive ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                <span>Órdenes de trabajo</span>
-                <i class="fa-solid fa-chevron-down text-[10px]
+                    <span>Órdenes de trabajo</span>
+                    <i
+                        class="fa-solid fa-chevron-down text-[10px]
                 {{ $otActive ? 'rotate-180' : '' }}"></i>
-            </button>
+                </button>
 
-            <div id="menu-ot"
-                class="ml-6 space-y-1 {{ $otActive ? '' : 'hidden' }}">
-                <a href="{{ route('ordenes.trabajo.asignar') }}"
-                class="block rounded-md
+                <div id="menu-ot" class="ml-6 space-y-1 {{ $otActive ? '' : 'hidden' }}">
+                    <a href="{{ route('ordenes.trabajo.asignar') }}"
+                        class="block rounded-md
                 {{ request()->routeIs('ordenes.trabajo.asignar') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                    Asignar OT
-                </a>
+                        Asignar OT
+                    </a>
 
-                <a href="{{ route('ordenes.trabajo.asignadas') }}"
-                class="block rounded-md
+                    <a href="{{ route('ordenes.trabajo.asignadas') }}"
+                        class="block rounded-md
                 {{ request()->routeIs('ordenes.trabajo.asignadas') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                    Asignadas
-                </a>
-            </div>
+                        Asignadas
+                    </a>
+                </div>
+            @endif
 
-        @endif
 
+            @if ($isAdmin || $isAdminInstalador)
+                {{-- Órdenes de trabajo --}}
+                @php$otActive = request()->routeIs('pedidos.materiales.*');
+                @endphp
 
-        @if ($isAdmin  || $isAdminInstalador )
-
-            {{-- Órdenes de trabajo --}}
-            @php $otActive = request()->routeIs('pedidos.materiales.*'); 
-            @endphp
-
-            <!--<button type="button"
+                <!--<button type="button"
                     onclick="toggleMenu('menu-solicitudes')"
                     class="w-full flex justify-between rounded-lg
                     {{ $otActive ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
@@ -154,118 +240,118 @@
                 {{ request()->routeIs('solicitudes.index') ? 'bg-indigo-100 text-indigo-700' : 'hover:bg-zinc-100' }}">
                     Realizadas
                 </a>-->
-            </div>
+                </div>
+            @endif
 
-        @endif
-
-        {{-- Usuarios --}}
-        @if ($isAdmin)
-            <a href="{{ route('users.index') }}"
-               class="block rounded-lg
+            {{-- Usuarios --}}
+            @if ($isAdmin)
+                <a href="{{ route('users.index') }}"
+                    class="block rounded-lg
                {{ request()->routeIs('users.index') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                Usuarios
-            </a>
-        @endif
-
-        {{-- Comercial --}}
-        @if ($isAdmin || $isAsesor)
-            <div class="mt-4 px-2 text-[10px] uppercase text-zinc-400">
-                Comercial
-            </div>
-
-            <a href="{{ route('portal-crm.seguimiento.index') }}"
-               class="block rounded-lg
-               {{ request()->routeIs('portal-crm.seguimiento.*') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                Seguimiento CRM
-            </a>
-
-            @if ($isAdmin || $isAsesor)
-                <a href="{{ route('portal-crm.eventos.index') }}"
-                class="block rounded-lg
-                {{ request()->routeIs('portal-crm.eventos.*') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                    Visitas / Eventos
+                    Usuarios
                 </a>
             @endif
 
-            <a href="{{ route('portal-crm.seguimiento.kpis.view') }}"
-               class="block rounded-lg
+            {{-- Comercial --}}
+            @if ($isAdmin || $isAsesor)
+                <div class="mt-4 px-2 text-[10px] uppercase text-zinc-400">
+                    Comercial
+                </div>
+
+                <a href="{{ route('portal-crm.seguimiento.index') }}"
+                    class="block rounded-lg
+               {{ request()->routeIs('portal-crm.seguimiento.*') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                    Seguimiento CRM
+                </a>
+
+                @if ($isAdmin || $isAsesor)
+                    <a href="{{ route('portal-crm.eventos.index') }}"
+                        class="block rounded-lg
+                {{ request()->routeIs('portal-crm.eventos.*') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
+                        Visitas / Eventos
+                    </a>
+                @endif
+
+                <a href="{{ route('portal-crm.seguimiento.kpis.view') }}"
+                    class="block rounded-lg
                {{ request()->routeIs('portal-crm.seguimiento.kpis.view') ? 'bg-indigo-50 text-indigo-700' : 'hover:bg-zinc-100' }}">
-                Dashboard CRM - KPIs
-            </a>
+                    Dashboard CRM - KPIs
+                </a>
 
-        @endif
-    </nav>
+            @endif
+        </nav>
 
-    {{-- Usuario --}}
-    <livewire:user.badge />
-</aside>
+        {{-- Usuario --}}
+        <livewire:user.badge />
+    </aside>
 
-{{-- MAIN --}}
-<div id="main-shell" class="md:pl-72 min-h-screen flex flex-col">
+    {{-- MAIN --}}
+    <div id="main-shell" class="md:pl-72 min-h-screen flex flex-col">
 
-    {{-- Header --}}
-    <header class="border-b bg-white">
-        <div class="h-16 px-4 flex items-center">
-            <button id="toggleSidebarDesktop" class="navbar-toggler">
-                <i class="fa-solid fa-bars"></i>
-            </button>
-        </div>
-    </header>
-
-    {{-- Contenido --}}
-    <main class="flex-1">
-        <section class="px-4 py-6">
-            <div class="rounded-xl border bg-white p-5">
-                @isset($slot)
-                    {{ $slot }}
-                @else
-                    @yield('content')
-                @endisset
+        {{-- Header --}}
+        <header class="border-b bg-white">
+            <div class="h-16 px-4 flex items-center">
+                <button id="toggleSidebarDesktop" class="navbar-toggler">
+                    <i class="fa-solid fa-bars"></i>
+                </button>
             </div>
-        </section>
-    </main>
+        </header>
 
-    {{-- Footer --}}
-    <footer class="border-t">
-        <div class="h-10 px-4 flex items-center text-xs text-zinc-500">
-            © {{ date('Y') }} {{ config('app.name') }}
-        </div>
-    </footer>
-</div>
+        {{-- Contenido --}}
+        <main class="flex-1">
+            <section class="px-4 py-6">
+                <div class="rounded-xl border bg-white p-5">
+                    @isset($slot)
+                        {{ $slot }}
+                    @else
+                        @yield('content')
+                    @endisset
+                </div>
+            </section>
+        </main>
 
-@livewireScripts
+        {{-- Footer --}}
+        <footer class="border-t">
+            <div class="h-10 px-4 flex items-center text-xs text-zinc-500">
+                © {{ date('Y') }} {{ config('app.name') }}
+            </div>
+        </footer>
+    </div>
 
-{{-- JS --}}
-<script src="https://kit.fontawesome.com/33667822a1.js" crossorigin="anonymous"></script>
+    @livewireScripts
 
-<script>
-    function toggleMenu(id) {
-        document.getElementById(id)?.classList.toggle('hidden');
-    }
+    {{-- JS --}}
+    <script src="https://kit.fontawesome.com/33667822a1.js" crossorigin="anonymous"></script>
 
-    (function () {
-        const body = document.body;
-        const btn = document.getElementById('toggleSidebarDesktop');
-
-        if (localStorage.getItem('sidebar-closed') === '1') {
-            body.classList.add('sidebar-closed');
+    <script>
+        function toggleMenu(id) {
+            document.getElementById(id)?.classList.toggle('hidden');
         }
 
-        btn?.addEventListener('click', function () {
-            const closed = body.classList.toggle('sidebar-closed');
-            localStorage.setItem('sidebar-closed', closed ? '1' : '0');
-        });
-    })();
-</script>
-<!-- jQuery -->
-<script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+        (function() {
+            const body = document.body;
+            const btn = document.getElementById('toggleSidebarDesktop');
 
-<!-- Popper -->
-<script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+            if (localStorage.getItem('sidebar-closed') === '1') {
+                body.classList.add('sidebar-closed');
+            }
 
-<!-- Bootstrap 4 -->
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.min.js"></script>
+            btn?.addEventListener('click', function() {
+                const closed = body.classList.toggle('sidebar-closed');
+                localStorage.setItem('sidebar-closed', closed ? '1' : '0');
+            });
+        })();
+    </script>
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
 
-@stack('scripts')
+    <!-- Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.1/dist/umd/popper.min.js"></script>
+
+    <!-- Bootstrap 4 -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/js/bootstrap.min.js"></script>
+
+    @stack('scripts')
 </body>
+
 </html>

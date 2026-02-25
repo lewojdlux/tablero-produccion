@@ -1,6 +1,6 @@
 @if($user = auth()->user())
   <details class="mt-auto border-t border-zinc-200 p-3 group">
-    <summary class="flex cursor-pointer list-none items-center gap-2 px-1 py-1.5 rounded-lg hover:bg-zinc-100">
+    <summary class="flex cursor-pointer list-none items-center gap-2 px-1 py-1.5 rounded-lg ">
       <span class="grid place-items-center h-8 w-8 rounded-lg bg-neutral-200 text-black text-sm font-semibold">
         {{ mb_strtoupper(mb_substr($user->name ?? 'U', 0, 1)) }}
       </span>

@@ -1332,13 +1332,13 @@
                         this.selectedWorkOrderId = id;
 
                         const resp = await fetch(`/ordenes-trabajo/${id}/mano-obra?pedido=${pedido}`);
+                        const data = await resp.json();
 
                         if (!resp.ok) {
                             alert(data.error || "Ocurrió un error procesando la información.");
                             return;
                         }
 
-                        const data = await resp.json();
 
                         this.manoObra = data.mano_obra;
                         this.manoObraTotal = data.mano_obra_total;

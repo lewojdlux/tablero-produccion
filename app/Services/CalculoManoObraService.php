@@ -6,12 +6,6 @@ class CalculoManoObraService
 {
     public function calcularPagoJornada($fecha, $horaInicio, $horaFin, $valorHora)
     {
-        if (!$fecha || !$horaInicio || !$horaFin) {
-            return [];
-        }
-
-        $valorHora = (float) $valorHora;
-
         $inicio = Carbon::parse("$fecha $horaInicio");
         $fin = Carbon::parse("$fecha $horaFin");
 
@@ -19,7 +13,7 @@ class CalculoManoObraService
             $fin->addDay();
         }
 
-        $resultados = [
+        $minutos = [
             'ordinaria' => 0,
             'extra_diurna' => 0,
             'extra_nocturna' => 0,
@@ -28,78 +22,102 @@ class CalculoManoObraService
         ];
 
         while ($inicio < $fin) {
-            $minutoActual = $inicio->copy();
+
+            $actual = $inicio->copy();
             $inicio->addMinute();
 
-            $diaSemana = $minutoActual->dayOfWeek;
-            $hora = $minutoActual->format('H:i');
+            $dia = $actual->dayOfWeek; // 0 domingo
+            $hora = $actual->format('H:i');
 
-            if ($diaSemana == 0) {
+            // ================= DOMINGO =================
+            if ($dia == 0) {
+
                 if ($hora >= '06:00' && $hora < '19:00') {
-                    $resultados['dominical_diurna']++;
+                    $minutos['dominical_diurna']++;
                 } else {
-                    $resultados['dominical_nocturna']++;
+                    $minutos['dominical_nocturna']++;
                 }
-            } else {
-                if ($diaSemana == 1) {
-                    if ($hora >= '07:00' && $hora < '16:00') {
-                        $resultados['ordinaria']++;
-                    } elseif ($hora >= '16:00' && $hora < '19:00') {
-                        $resultados['extra_diurna']++;
-                    } else {
-                        $resultados['extra_nocturna']++;
-                    }
-                } elseif ($diaSemana >= 2 && $diaSemana <= 5) {
-                    if ($hora >= '07:00' && $hora < '17:00') {
-                        $resultados['ordinaria']++;
-                    } elseif ($hora >= '17:00' && $hora < '19:00') {
-                        $resultados['extra_diurna']++;
-                    } else {
-                        $resultados['extra_nocturna']++;
-                    }
-                } else {
-                    if ($hora >= '06:00' && $hora < '19:00') {
-                        $resultados['dominical_diurna']++;
-                    } else {
-                        $resultados['dominical_nocturna']++;
-                    }
+
+            }
+
+            // ================= LUNES =================
+            elseif ($dia == 1) {
+
+                if ($hora >= '07:00' && $hora < '16:00') {
+                    $minutos['ordinaria']++;
                 }
+                elseif ($hora >= '16:00' && $hora < '19:00') {
+                    $minutos['extra_diurna']++;
+                }
+                else {
+                    $minutos['extra_nocturna']++;
+                }
+
+            }
+
+            // ================= MARTES A VIERNES =================
+            elseif ($dia >= 2 && $dia <= 5) {
+
+                if ($hora >= '07:00' && $hora < '17:00') {
+                    $minutos['ordinaria']++;
+                }
+                elseif ($hora >= '17:00' && $hora < '19:00') {
+                    $minutos['extra_diurna']++;
+                }
+                else {
+                    $minutos['extra_nocturna']++;
+                }
+
+            }
+
+            // ================= SÁBADO =================
+            elseif ($dia == 6) {
+
+                if ($hora >= '06:00' && $hora < '19:00') {
+                    $minutos['extra_diurna']++;
+                }
+                else {
+                    $minutos['extra_nocturna']++;
+                }
+
             }
         }
-        foreach ($resultados as $key => $value) {
-            $resultados[$key] = round($value / 60, 2);
+
+        // Convertir minutos a horas
+        foreach ($minutos as $key => $value) {
+            $minutos[$key] = round($value / 60, 2);
         }
 
         return [
             [
                 'tipo' => 'Ordinaria',
-                'horas' => $resultados['ordinaria'],
+                'horas' => $minutos['ordinaria'],
                 'valor_hora' => round($valorHora, 2),
-                'total' => round($resultados['ordinaria'] * $valorHora, 2),
+                'total' => round($minutos['ordinaria'] * $valorHora, 2),
             ],
             [
                 'tipo' => 'Extra Diurna',
-                'horas' => $resultados['extra_diurna'],
-                'valor_hora' => round($valorHora * 1.0125, 2),
-                'total' => round($resultados['extra_diurna'] * ($valorHora * 1.0125), 2),
+                'horas' => $minutos['extra_diurna'],
+                'valor_hora' => round($valorHora * 1.25, 2),
+                'total' => round($minutos['extra_diurna'] * ($valorHora * 1.25), 2),
             ],
             [
                 'tipo' => 'Extra Nocturna',
-                'horas' => $resultados['extra_nocturna'],
-                'valor_hora' => round($valorHora * 1.0175, 2),
-                'total' => round($resultados['extra_nocturna'] * ($valorHora * 1.0175), 2),
+                'horas' => $minutos['extra_nocturna'],
+                'valor_hora' => round($valorHora * 1.75, 2),
+                'total' => round($minutos['extra_nocturna'] * ($valorHora * 1.75), 2),
             ],
             [
                 'tipo' => 'Dom/Fest Diurna',
-                'horas' => $resultados['dominical_diurna'],
-                'valor_hora' => round($valorHora * 1.0205, 2),
-                'total' => round($resultados['dominical_diurna'] * ($valorHora * 1.0205), 2),
+                'horas' => $minutos['dominical_diurna'],
+                'valor_hora' => round($valorHora * 2.05, 2),
+                'total' => round($minutos['dominical_diurna'] * ($valorHora * 2.05), 2),
             ],
             [
                 'tipo' => 'Dom/Fest Nocturna',
-                'horas' => $resultados['dominical_nocturna'],
-                'valor_hora' => round($valorHora * 1.0255, 2),
-                'total' => round($resultados['dominical_nocturna'] * ($valorHora * 1.0255), 2),
+                'horas' => $minutos['dominical_nocturna'],
+                'valor_hora' => round($valorHora * 2.55, 2),
+                'total' => round($minutos['dominical_nocturna'] * ($valorHora * 2.55), 2),
             ],
         ];
     }

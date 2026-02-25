@@ -77,10 +77,10 @@
             <input type="number" v-model.number="cantidad" min="1" class="form-control w-auto ms-2"
                 style="width:90px">
 
-            <button v-if="query && query.length >= 2 && !showSuggestions" @click="openPedidoModal({ codigo: query })"
+            <button v-if="query && query.length >= 2 && !showSuggestions" @click="openPedidoModal({ codigo: query  })"
                 class="btn btn-warning ms-2">Reportar: "@{{ query }}"</button>
 
-            <button @click="openPedidoModal({})" class="btn btn-outline-primary ms-2">Solicitar material</button>
+            <button @click="abrirSolicitudDesdeBusqueda" class="btn btn-outline-primary ms-2">Solicitar material</button>
         </div>
 
         @php
@@ -384,7 +384,7 @@
                                 return;
                             }
 
-                            // ✅ ÉXITO
+                            // ÉXITO
                             this.showToast(
                                 'Material asignado',
                                 'El material se agregó correctamente a la orden.',
@@ -664,6 +664,28 @@
                             this.toasts = this.toasts.filter(t => t.id !== id);
                         }, 5000);
                     },
+
+                    abrirSolicitudDesdeBusqueda() {
+
+                    //Si hay sugerencias visibles, usar la primera (lo que está consultando)
+                    if (this.showSuggestions && this.suggestions.length > 0) {
+
+                        const s = this.suggestions[0];
+
+                        this.openPedidoModal({
+                            codigo: s.codigo,
+                            nombre: s.nombre
+                        });
+
+                        return;
+                    }
+
+                    //  Si no hay sugerencias, usar lo que escribió
+                    this.openPedidoModal({
+                        codigo: this.query,
+                        nombre: this.query
+                    });
+                }
 
                 }
             }).mount('#asignar-herramienta-app');

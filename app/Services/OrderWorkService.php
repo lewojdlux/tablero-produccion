@@ -263,25 +263,36 @@ class OrderWorkService
             throw new Exception('La orden no está finalizada.');
         }
 
-        $registros = $this->orderWorkRepository->getManoObra($id);
+        $calculoService = app(CalculoManoObraService::class);
+
+        // =====================
+        // TRAER ACOMPAÑANTES
+        // =====================
+        $acompanantes = DB::table('orden_trabajo_jornadas as otj')
+            ->join('instalador as ia', function ($join) {
+                $join->whereRaw("
+                JSON_CONTAINS(
+                    otj.acompanante_ot,
+                    ia.id_instalador
+                )
+            ");
+            })
+            ->where('otj.orden_trabajo_id', $id)
+            ->select('otj.fecha', 'otj.hora_inicio', 'otj.hora_fin', 'ia.id_instalador', 'ia.nombre_instalador', 'ia.valor_hora')
+            ->get();
 
         $detalle = collect();
 
-        foreach ($registros as $r) {
-
-            if (!$r->hora_inicio || !$r->hora_fin) continue;
-
-            $calculo = app(\App\Services\CalculoManoObraService::class)
-                ->calcularPagoJornada(
-                    $r->fecha,
-                    $r->hora_inicio,
-                    $r->hora_fin,
-                    $r->valor_hora
-                );
+        // =====================
+        // CALCULAR POR INSTALADOR
+        // =====================
+        foreach ($acompanantes as $r) {
+            $calculo = $calculoService->calcularPagoJornada($r->fecha, $r->hora_inicio, $r->hora_fin, $r->valor_hora);
 
             foreach ($calculo as $c) {
                 if ($c['horas'] > 0) {
                     $detalle->push([
+                        'id_instalador' => $r->id_instalador,
                         'nombre_instalador' => $r->nombre_instalador,
                         'tipo' => $c['tipo'],
                         'horas' => $c['horas'],
@@ -292,10 +303,16 @@ class OrderWorkService
             }
         }
 
+        // =====================
+        // AGRUPAR POR INSTALADOR
+        // =====================
         $manoObra = $detalle
-            ->groupBy(fn($item) => $item['nombre_instalador'].'_'.$item['tipo'])
+            ->groupBy(function ($item) {
+                return $item['id_instalador'] . '_' . $item['tipo'];
+            })
             ->map(function ($items) {
-                return (object)[
+                return (object) [
+                    'id_instalador' => $items->first()['id_instalador'],
                     'nombre_instalador' => $items->first()['nombre_instalador'],
                     'tipo' => $items->first()['tipo'],
                     'horas' => round($items->sum('horas'), 2),
@@ -303,26 +320,33 @@ class OrderWorkService
                     'total' => round($items->sum('total'), 2),
                 ];
             })
-            ->values();
+            ->sortBy(function ($item) {
+                $orden = [
+                    'Ordinaria' => 1,
+                    'Extra Diurna' => 2,
+                    'Extra Nocturna' => 3,
+                    'Dom/Fest Diurna' => 4,
+                    'Dom/Fest Nocturna' => 5,
+                ];
 
-        $manoObraTotal = $manoObra->sum('total');
+                return $orden[$item->tipo] ?? 99;
+            })
+            ->values()
+            ->map(fn($item) => (object) $item);
 
-        $materiales = $this->orderWorkRepository->getMateriales($id)
-            ->map(function ($m) {
+        $manoObraTotal = $manoObra->sum('total') ?? 0;
+        $materiales = $this->orderWorkRepository->getMateriales($id)->map(function ($m) {
+            $cantidad = (float) ($m->cantidad ?? 0);
+            $costo = (float) ($m->ultimo_costo ?? 0);
 
-                $cantidad = (float) ($m->cantidad ?? 0);
-                $costo    = (float) ($m->ultimo_costo ?? 0);
+            $m->cantidad = $cantidad;
+            $m->ultimo_costo = $costo;
+            $m->total = round($cantidad * $costo, 2);
 
-                $m->cantidad = $cantidad;
-                $m->ultimo_costo = $costo;
-                $m->total = round($cantidad * $costo, 2);
+            return $m;
+        });
 
-                return $m;
-            });
-
-        $solicitudTotal =  $materiales->sum('total') ?? 0;
-
-
+        $solicitudTotal = $materiales->sum('total') ?? 0;
 
         $servicios = $this->orderWorkRepository->getServicios($ordenTrabajo->pd_servicio);
 
@@ -330,21 +354,9 @@ class OrderWorkService
 
         $utilidad = $pedidoTotal - $manoObraTotal - $solicitudTotal;
 
-        $porcentajeUtilidad = $pedidoTotal > 0
-            ? round(($utilidad / $pedidoTotal) * 100, 2)
-            : 0;
+        $porcentajeUtilidad = $pedidoTotal > 0 ? round(($utilidad / $pedidoTotal) * 100, 2) : 0;
 
-        return compact(
-            'ordenTrabajo',
-            'manoObra',
-            'manoObraTotal',
-            'materiales',
-            'solicitudTotal',
-            'servicios',
-            'pedidoTotal',
-            'utilidad',
-            'porcentajeUtilidad'
-        );
+        return compact('ordenTrabajo', 'manoObra', 'manoObraTotal', 'materiales', 'solicitudTotal', 'servicios', 'pedidoTotal', 'utilidad', 'porcentajeUtilidad');
     }
 
     // función para obtener el PD de servicio existente

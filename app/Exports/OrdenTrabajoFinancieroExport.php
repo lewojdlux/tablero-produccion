@@ -45,7 +45,6 @@ class OrdenTrabajoFinancieroExport implements FromArray, WithStyles, WithTitle
             $servicios = collect();
 
             try {
-
                 $servicios = DB::connection('sqlsrv')
                     ->table('TblDetalleDocumentos as d')
                     ->join('TblProductos as p', 'p.StrIdProducto', '=', 'd.StrProducto')
@@ -68,69 +67,35 @@ class OrdenTrabajoFinancieroExport implements FromArray, WithStyles, WithTitle
 
             $pedidoTotal = $servicios->sum('total');
 
-            // =========================
-            // MANO DE OBRA
-            // =========================
             $principal = DB::table('orden_trabajo_jornadas as otj')->join('work_orders as wo', 'wo.id_work_order', '=', 'otj.orden_trabajo_id')
             ->join('instalador as i', 'i.id_instalador', '=', 'wo.instalador_id')
             ->where('otj.orden_trabajo_id', $this->id)
             ->select('otj.fecha', 'otj.hora_inicio', 'otj.hora_fin', 'i.id_instalador', 'i.nombre_instalador', 'i.valor_hora')
             ->get();
 
-           // =========================
-            // MANO DE OBRA
-            // =========================
-
-            $principal = DB::table('orden_trabajo_jornadas as otj')
-                ->join('work_orders as wo', 'wo.id_work_order', '=', 'otj.orden_trabajo_id')
-                ->join('instalador as i', 'i.id_instalador', '=', 'wo.instalador_id')
-                ->where('otj.orden_trabajo_id', $this->id)
-                ->select(
-                    'otj.fecha',
-                    'otj.hora_inicio',
-                    'otj.hora_fin',
-                    'i.id_instalador',
-                    'i.nombre_instalador',
-                    'i.valor_hora'
-                )
-                ->get();
-
+            // =====================
+            // TRAER ACOMPAÑANTES
+            // =====================
             $acompanantes = DB::table('orden_trabajo_jornadas as otj')
-                ->whereNotNull('otj.acompanante_ot')
                 ->join('instalador as ia', function ($join) {
                     $join->whereRaw("
-                        JSON_CONTAINS(
-                            otj.acompanante_ot,
-                            CONCAT('[', ia.id_instalador, ']')
-                        )
-                    ");
+                JSON_CONTAINS(
+                    otj.acompanante_ot,
+                    ia.id_instalador
+                )
+            ");
                 })
                 ->where('otj.orden_trabajo_id', $this->id)
-                ->select(
-                    'otj.fecha',
-                    'otj.hora_inicio',
-                    'otj.hora_fin',
-                    'ia.id_instalador',
-                    'ia.nombre_instalador',
-                    'ia.valor_hora'
-                )
+                ->select('otj.fecha', 'otj.hora_inicio', 'otj.hora_fin', 'ia.id_instalador', 'ia.nombre_instalador', 'ia.valor_hora')
                 ->get();
-
-            // unir principal + acompañantes
-            $registros = $principal->merge($acompanantes);
 
             $detalle = collect();
 
-            foreach ($registros as $r) {
-
-                if (!$r->hora_inicio || !$r->hora_fin) continue;
-
-                $calculo = $calculoService->calcularPagoJornada(
-                    $r->fecha,
-                    $r->hora_inicio,
-                    $r->hora_fin,
-                    $r->valor_hora
-                );
+            // =====================
+            // CALCULAR POR INSTALADOR
+            // =====================
+            foreach ($acompanantes as $r) {
+                $calculo = $calculoService->calcularPagoJornada($r->fecha, $r->hora_inicio, $r->hora_fin, $r->valor_hora);
 
                 foreach ($calculo as $c) {
                     if ($c['horas'] > 0) {
@@ -147,9 +112,9 @@ class OrdenTrabajoFinancieroExport implements FromArray, WithStyles, WithTitle
             }
 
             $manoObra = $detalle
-                ->groupBy(fn($item) => $item['id_instalador'].'_'.$item['tipo'])
+                ->groupBy(fn($item) => $item['id_instalador'] . '_' . $item['tipo'])
                 ->map(function ($items) {
-                    return (object)[
+                    return (object) [
                         'nombre_instalador' => $items->first()['nombre_instalador'],
                         'tipo' => $items->first()['tipo'],
                         'horas' => round($items->sum('horas'), 2),

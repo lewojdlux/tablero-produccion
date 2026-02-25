@@ -50,114 +50,174 @@
 
         </div>
 
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 
+            {{-- COLUMNA IZQUIERDA - MATERIALES --}}
+            @if ($pedidoMaterialItem->count())
+                <div class="border rounded-lg p-4 bg-white shadow-sm">
+                    <h3 class="text-sm font-semibold mb-3">
+                        Materiales solicitados
+                    </h3>
 
-        @if (isset($solicitud) && $solicitud)
-            <div class="border rounded-lg p-4 bg-green-50 text-sm">
-                <div class="flex justify-between">
-                    <div>
-                        <strong>Compra registrada</strong><br>
-                        Consecutivo: {{ $solicitud->consecutivo_compra }}<br>
-                        Estado: {{ strtoupper($solicitud->status) }}
-                    </div>
-                    <div class="text-xs text-zinc-500">
-                        {{ \Carbon\Carbon::parse($solicitud->fecha_registro)->format('d/m/Y H:i') }}
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs border">
+                            <thead class="bg-zinc-100">
+                                <tr>
+                                    <th class="px-3 py-2 text-left border">Código</th>
+                                    <th class="px-3 py-2 text-left border">Descripción</th>
+                                    <th class="px-3 py-2 text-center border">Cantidad</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach ($pedidoMaterialItem as $item)
+                                    <tr class="hover:bg-zinc-50">
+                                        <td class="px-3 py-2 border">
+                                            {{ $item->codigo_material }}
+                                        </td>
+                                        <td class="px-3 py-2 border">
+                                            {{ $item->descripcion_material }}
+                                        </td>
+                                        <td class="px-3 py-2 text-center border font-semibold">
+                                            {{ $item->cantidad }}
+                                        </td>
+                                    </tr>
+                                @endforeach
+                            </tbody>
+                        </table>
                     </div>
                 </div>
-            </div>
+            @endif
+
+
+            {{-- COLUMNA DERECHA - COMPRA --}}
+            @if ($solicitudes->count())
+
+                @foreach ($solicitudes as $solicitud)
+
+                    <div class="border rounded-lg p-4 bg-white shadow-sm h-fit mb-3">
+                        <h3 class="text-sm font-semibold mb-3">
+                            Compra registrada
+                        </h3>
+
+                        <div class="text-sm space-y-2">
+                            <div>
+                                <span class="text-zinc-500">Consecutivo:</span><br>
+                                <span class="font-semibold">
+                                    {{ $solicitud->consecutivo_compra }}
+                                </span>
+                            </div>
+
+                            <div>
+                                <span class="text-zinc-500">Estado:</span><br>
+                                <span class="px-2 py-1 rounded text-xs font-semibold
+                                    {{ $solicitud->status === 'approved' 
+                                        ? 'bg-green-100 text-green-700' 
+                                        : 'bg-yellow-100 text-yellow-700' }}">
+                                    {{ strtoupper($solicitud->status) }}
+                                </span>
+                            </div>
+
+                            <div class="text-xs text-zinc-500 pt-2 border-t">
+                                {{ \Carbon\Carbon::parse($solicitud->fecha_registro)->format('d/m/Y H:i') }}
+                            </div>
+                        </div>
+                    </div>
+
+                @endforeach
+
+            @endif
+
+        </div>
+
+
+        @if (!$solicitudes->where('status', 'approved')->count())
+            {{-- FORM --}}
+            <form ref="form" action="{{ route('solicitudes.store', $ordenTrabajo->id_work_order) }}" method="POST"
+                enctype="multipart/form-data" class="space-y-6" @submit.prevent="submitForm">
+
+                @csrf
+
+                {{-- IDs ocultos --}}
+                <input type="hidden" name="orden_trabajo_id" value="{{ $ordenTrabajo->id_work_order }}">
+                <input type="hidden" name="instalador_id" value="{{ $ordenTrabajo->instalador_id }}">
+
+
+                <div>
+                    <label class="text-xs font-medium">
+                        Buscar Orden de Compra (131)
+                    </label>
+
+                    <input type="text" v-model="searchCompra" @input="buscarCompra"
+                        placeholder="Ingrese número de documento..." class="mt-1 w-full border rounded px-2 py-1 text-xs">
+
+                    <div v-if="resultados.length" class="border mt-2 rounded bg-white max-h-40 overflow-y-auto">
+
+
+                        @if (!isset($solicitud))
+                            {{-- buscador compra --}}
+                        @else
+                            <div class="text-xs text-zinc-500">
+                                Esta orden ya tiene una solicitud registrada.
+                            </div>
+                        @endif
+
+                        <div v-for="r in resultados" :key="r.IntDocumento" @click="seleccionarCompra(r)"
+                            class="px-3 py-2 text-xs hover:bg-zinc-100 cursor-pointer">
+
+                            <strong>@{{ r.IntDocumento }}</strong>
+                            <div class="text-zinc-500">
+                                @{{ r.proveedor }}
+                            </div>
+
+                        </div>
+
+                    </div>
+                </div>
+
+                {{-- OBSERVACIONES --}}
+                <div>
+                    <label class="text-xs font-medium">Observaciones</label>
+                    <textarea name="observaciones" rows="3" class="mt-1 w-full border rounded px-2 py-1 text-xs"
+                        placeholder="Observaciones generales de la solicitud…"></textarea>
+                </div>
+
+            </form>
         @endif
 
+        {{-- ================== BOTONES INFERIORES ================== --}}
 
+        <div class="flex justify-between items-center mt-6 border-t pt-4">
 
-        {{-- FORM --}}
-        <form ref="form" action="{{ route('solicitudes.store', $ordenTrabajo->id_work_order) }}" method="POST"
-            enctype="multipart/form-data" class="space-y-6" @submit.prevent="submitForm">
+            {{-- BOTÓN VOLVER (SIEMPRE VISIBLE) --}}
+            <a href="{{ route('ordenes.trabajo.asignadas') }}" class="btn btn-outline-secondary btn-sm">
+                Volver
+            </a>
 
-            @csrf
+            <div class="flex gap-2">
 
-            {{-- IDs ocultos --}}
-            <input type="hidden" name="orden_trabajo_id" value="{{ $ordenTrabajo->id_work_order }}">
-            <input type="hidden" name="instalador_id" value="{{ $ordenTrabajo->instalador_id }}">
-
-
-            <div>
-                <label class="text-xs font-medium">
-                    Buscar Orden de Compra (131)
-                </label>
-
-                <input type="text" v-model="searchCompra" @input="buscarCompra"
-                    placeholder="Ingrese número de documento..." class="mt-1 w-full border rounded px-2 py-1 text-xs">
-
-                <div v-if="resultados.length" class="border mt-2 rounded bg-white max-h-40 overflow-y-auto">
-
-
-                    @if (!isset($solicitud))
-                        {{-- buscador compra --}}
-                    @else
-                        <div class="text-xs text-zinc-500">
-                            Esta orden ya tiene una solicitud registrada.
-                        </div>
-                    @endif
-
-                    <div v-for="r in resultados" :key="r.IntDocumento" @click="seleccionarCompra(r)"
-                        class="px-3 py-2 text-xs hover:bg-zinc-100 cursor-pointer">
-
-                        <strong>@{{ r.IntDocumento }}</strong>
-                        <div class="text-zinc-500">
-                            @{{ r.proveedor }}
-                        </div>
-
-                    </div>
-
-                </div>
-            </div>
-
-
-            {{-- OBSERVACIONES --}}
-            <div>
-                <label class="text-xs font-medium">Observaciones</label>
-                <textarea name="observaciones" rows="3" class="mt-1 w-full border rounded px-2 py-1 text-xs"
-                    placeholder="Observaciones generales de la solicitud…"></textarea>
-            </div>
-
-
-
-
-
-            {{-- BOTONES --}}
-            <div class="flex justify-end gap-2 mt-3">
-
-                <a href="{{ route('ordenes.trabajo.asignadas') }}" class="btn btn-outline-secondary btn-sm">
-                    Cancelar
-                </a>
-
-                @if (isset($solicitud) && $solicitud->status === 'approved')
-                    <button type="submit" disabled class="btn btn-success btn-sm">
-                        Solicitud aprobada
-                    </button>
-                @else
-                    <button type="submit" :disabled="enviando" class="btn btn-dark btn-sm">
+                {{-- BOTÓN GUARDAR --}}
+                @if (!isset($solicitud) || $solicitud->status !== 'approved')
+                    <button type="button" @click="$refs.form.submit()" :disabled="enviando" class="btn btn-dark btn-sm">
                         Guardar solicitud
                     </button>
                 @endif
 
+                {{-- BOTÓN APROBAR --}}
+                @foreach ($solicitudes->where('status','!=','approved') as $solicitud)
+                    <form method="POST" action="{{ route('solicitudes.approve', $solicitud->id_solicitud_material) }}">
+                        @csrf
+                        <button type="submit"
+                            onclick="return confirm('¿Desea aprobar esta solicitud?')"
+                            class="btn btn-success btn-sm">
+                            Aprobar solicitud {{ $solicitud->consecutivo_compra }}
+                        </button>
+                    </form>
+                @endforeach
+
             </div>
 
-        </form>
+        </div>
 
-
-
-        {{-- BOTÓN APROBAR FUERA DEL FORM PRINCIPAL --}}
-        @if (isset($solicitud) && $solicitud->status !== 'approved')
-            <form method="POST" action="{{ route('solicitudes.approve', $solicitud->id_solicitud_material) }}"
-                class="d-inline">
-                @csrf
-                <button type="submit" onclick="return confirm('¿Desea aprobar esta solicitud?')"
-                    class="btn btn-success btn-sm">
-                    Aprobar solicitud
-                </button>
-            </form>
-        @endif
 
     </div>
 @endsection
