@@ -171,7 +171,7 @@
 
         {{-- Logo --}}
         <div class="h-16 flex items-center px-4 border-b">
-            <a href="{{ route('dashboard') }}" class="font-semibold">
+            <a href="{{ route('dashboard') }}" class="font-semibold text-white no-underline hover:text-gray-300">
                 {{ config('app.name') }}
             </a>
         </div>
