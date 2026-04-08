@@ -171,6 +171,22 @@
                                     @enderror
                                 </div>
                             @endif
+
+                            @if ($perfilInstaladorId !== null && (int)$perfil_usuario_id === (int)$perfilInstaladorId)
+                                <div class="col-md-6">
+                                    <label class="form-label form-label-sm">Código instalador</label>
+                                    <input type="number"
+                                        class="form-control form-control-sm"
+                                        wire:model.defer="identificador_instalador"
+                                        min="1">
+                                    @error('identificador_instalador')
+                                        <div class="text-danger small">{{ $message }}</div>
+                                    @enderror
+                                </div>
+                            @endif
+                            
+
+
                             <div class="col-md-6 d-flex align-items-end">
                                 <div class="form-check">
                                     <input id="estado" type="checkbox" class="form-check-input"

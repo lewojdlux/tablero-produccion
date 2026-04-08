@@ -6,9 +6,7 @@
             display: none;
         }
 
-        .overflow-visible {
-            overflow: visible !important;
-        }
+
 
         .dropdown-menu {
             z-index: 9999 !important;
@@ -74,7 +72,18 @@
             </div>
         </div>
 
+        <div class="flex items-center gap-2 mb-2">
 
+            <button class="btn btn-outline-dark btn-sm" @click="toggleCalendar">
+                <i class="fas fa-calendar-alt me-1"></i>
+                Programación Instaladores
+            </button>
+
+        </div>
+
+        <div v-show="showCalendar" class="mt-3">
+            <div id="calendar"></div>
+        </div>
 
         {{-- Filtros --}}
         <details class="rounded border border-zinc-200 bg-zinc-50 p-2 pb-3 mb-3" open>
@@ -118,193 +127,219 @@
         @endif
 
         {{-- Tabla --}}
-        <div class="rounded-lg border border-zinc-200">
-            <div class="overflow-x-auto overflow-visible">
-                <table class="table-responsive">
-                    <thead>
-                        <th class="px-2 py-1 font-medium">Consecutivo</th>
-                        <th class="px-2 py-1 font-medium">Instalador</th>
-                        <th class="px-2 py-1 font-medium">Cliente</th>
-                        <th class="px-2 py-1 font-medium">Asesor</th>
-                        <th class="px-2 py-1 font-medium text-center">Estado</th>
-                        <th class="px-2 py-1 font-medium text-center">Acciones</th>
-                    </thead>
+        <div class="card shadow-sm">
+            <div class="card-body p-0">
+                <div class="">
+                    <table class="table table-hover align-middle mb-0">
+                        <thead class="table-light">
+                            <th class="px-2 py-1 font-medium">Consecutivo</th>
+                            <th class="px-2 py-1 font-medium">Instalador</th>
+                            <th class="px-2 py-1 font-medium">Cliente</th>
+                            <th class="px-2 py-1 font-medium">Asesor</th>
+                            <th class="px-2 py-1 font-medium text-center">Estado</th>
+                            <th class="px-2 py-1 font-medium text-center">Acciones</th>
+                        </thead>
 
-                    <tbody>
-                        <tr v-for="workOrder in filteredWorkOrders" :key="workOrder.id_work_order"
-                            class="border-b border-zinc-200 hover:bg-zinc-50">
+                        <tbody>
+                            <tr v-for="workOrder in filteredWorkOrders" :key="workOrder.id_work_order"
+                                class="border-b border-zinc-200 hover:bg-zinc-50">
 
-                            <td class="px-2 py-1">@{{ workOrder.n_documento }}</td>
+                                <td class="px-2 py-1">@{{ workOrder.n_documento }}</td>
 
-                            <td class="px-2 py-1">
-                                @{{ workOrder.instalador ? workOrder.instalador.nombre_instalador : '' }}
-                            </td>
+                                <td class="px-2 py-1">
+                                    @{{ workOrder.instalador ? workOrder.instalador.nombre_instalador : '' }}
+                                </td>
 
-                            <td class="px-2 py-1">@{{ workOrder.tercero }}</td>
+                                <td class="px-2 py-1">@{{ workOrder.tercero }}</td>
 
-                            <td class="px-2 py-1">@{{ workOrder.vendedor }}</td>
+                                <td class="px-2 py-1">@{{ workOrder.vendedor }}</td>
 
-                            <td class="px-2 py-1 text-center">
-                                <span v-if="workOrder.status === 'completed'" class="btn-sm btn  btn-success">
-                                    Finalizada
-                                </span>
+                                <td class="px-2 py-1 text-center">
+                                    <span v-if="workOrder.status === 'completed'" class="btn-sm btn  btn-success">
+                                        Finalizada
+                                    </span>
 
-                                <span v-else-if="workOrder.status === 'in_progress'"
-                                    class="btn-sm btn  btn-warning text-dark">
-                                    En Progreso
-                                </span>
+                                    <span v-else-if="workOrder.status === 'in_progress'"
+                                        class="btn-sm btn  btn-warning text-dark">
+                                        En Progreso
+                                    </span>
 
-                                <span v-else-if="workOrder.status === 'pending'" class="btn-sm btn  btn-danger">
-                                    Pendiente
-                                </span>
+                                    <span v-else-if="workOrder.status === 'pending'" class="btn-sm btn  btn-danger">
+                                        Pendiente
+                                    </span>
 
-                                <span v-else class="badge bg-secondary">
-                                    @{{ workOrder.status }}
-                                </span>
-                            </td>
-
-
-                            <td class="text-center align-middle">
-                                <div class="dropdown" ata-bs-auto-close="outside">
-
-                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle px-3" type="button"
-                                        data-bs-toggle="dropdown" aria-expanded="false">
-                                        <i class="fas fa-ellipsis-h me-1"></i>
-                                        Acciones
-                                    </button>
-
-                                    <ul class="dropdown-menu dropdown-menu-end">
-
-                                        {{-- ================= INICIAR OT ================= --}}
-                                        @if ($isInstalador)
-                                            <li v-if="workOrder.status === 'pending'">
-                                                <a class="dropdown-item" href="#"
-                                                    @click.prevent="iniciarOT(workOrder.id_work_order)">
-                                                    <i class="fas fa-play me-2 text-danger"></i>
-                                                    Iniciar OT
-                                                </a>
-                                            </li>
-                                        @endif
+                                    <span v-else class="badge bg-secondary">
+                                        @{{ workOrder.status }}
+                                    </span>
+                                </td>
 
 
-                                        {{-- ================= FINALIZAR OT ================= --}}
-                                        @if ($isInstalador)
-                                            <li v-if="workOrder.status === 'in_progress'">
-                                                <a class="dropdown-item" href="#"
-                                                    @click.prevent="irFinalizarOT(workOrder.id_work_order)">
-                                                    <i class="fas fa-check me-2 text-success"></i>
-                                                    Finalizar OT
-                                                </a>
-                                            </li>
-                                        @endif
+                                <td class="text-center align-middle">
+                                    <div class="dropdown" data-bs-auto-close="outside">
+
+                                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle px-3" type="button"
+                                            data-bs-toggle="dropdown" aria-expanded="false">
+                                            <i class="fas fa-ellipsis-h me-1"></i>
+                                            Acciones
+                                        </button>
+
+                                        <ul class="dropdown-menu dropdown-menu-end">
+
+                                            {{-- ================= INICIAR OT ================= --}}
+                                            @if ($isInstalador)
+                                                <li v-if="workOrder.status === 'pending'">
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="iniciarOT(workOrder.id_work_order)">
+                                                        <i class="fas fa-play me-2 text-danger"></i>
+                                                        Iniciar OT
+                                                    </a>
+                                                </li>
+                                            @endif
 
 
-                                        {{-- ================= ASIGNAR MATERIAL ================= --}}
-                                        @if ($isInstalador)
-                                            <li v-if="workOrder.status !== 'completed'">
-                                                <a class="dropdown-item" href="#"
-                                                    @click.prevent="irAsignarMaterial(workOrder.id_work_order)">
-                                                    <i class="fas fa-tools me-2 text-warning"></i>
-                                                    Asignar material
-                                                </a>
-                                            </li>
-                                        @endif
+                                            {{-- ================= FINALIZAR OT ================= --}}
+                                            @if ($isInstalador)
+                                                <li v-if="workOrder.status === 'in_progress'">
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="irFinalizarOT(workOrder.id_work_order)">
+                                                        <i class="fas fa-check me-2 text-success"></i>
+                                                        Finalizar OT
+                                                    </a>
+                                                </li>
+                                            @endif
 
 
-                                        {{-- ================= ASIGNAR INSTALADORES ================= --}}
-                                        @if ($isInstalador)
-                                            <li v-if="workOrder.status !== 'completed'">
-                                                <a class="dropdown-item" href="#"
-                                                    @click.prevent="abrirModalAsignacion(workOrder.id_work_order)">
-                                                    <i class="fas fa-user-cog me-2 text-primary"></i>
-                                                    Asignar Instaladores
-                                                </a>
-                                            </li>
-                                        @endif
+                                            {{-- ================= ASIGNAR MATERIAL ================= --}}
+                                            @if ($isInstalador)
+                                                <li v-if="workOrder.status !== 'completed'">
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="irAsignarMaterial(workOrder.id_work_order)">
+                                                        <i class="fas fa-tools me-2 text-warning"></i>
+                                                        Asignar material
+                                                    </a>
+                                                </li>
+                                            @endif
 
 
-                                        @if ($isInstalador)
-                                            <li>
-                                                <a class="dropdown-item" href="#"
-                                                    @click.prevent="abrirModalProgramacion(workOrder)">
-                                                    <i class="fas fa-calendar-alt me-2 text-primary"></i>
-                                                    Programar OT
-                                                </a>
-                                            </li>
-                                        @endif
+                                            {{-- ================= ASIGNAR INSTALADORES ================= --}}
+                                            @if ($isInstalador)
+                                                <li v-if="workOrder.status !== 'completed'">
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="abrirModalAsignacion(workOrder.id_work_order)">
+                                                        <i class="fas fa-user-cog me-2 text-primary"></i>
+                                                        Asignar Instaladores
+                                                    </a>
+                                                </li>
+                                            @endif
 
 
-                                        {{-- ================= VER PEDIDO (INSTALADOR + ADMIN) ================= --}}
-                                        @if ($isInstalador || $isAdmin || $isAdminInstalador)
-                                            <li>
-                                                <a class="dropdown-item" href="#"
-                                                    @click.prevent="verPedidoMaterialHgi(workOrder.id_work_order)">
-                                                    <i class="fas fa-file-alt me-2 text-warning"></i>
-                                                    Ver Pedido
-                                                </a>
-                                            </li>
-                                        @endif
+                                            @if ($isInstalador)
+                                                <li>
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="abrirModalProgramacion(workOrder)">
+                                                        <i class="fas fa-calendar-alt me-2 text-primary"></i>
+                                                        Programar OT
+                                                    </a>
+                                                </li>
+
+                                                <li v-if="workOrder.status === 'completed' || workOrder.status !== 'in_progress' ">
+                                                    <a class="dropdown-item"
+                                                    :href="`/ordenes-trabajo/${workOrder.id_work_order}/adjuntar-fotos`">
+                                                        <i class="fas fa-camera me-2 text-primary"></i>
+                                                        Adjuntar Fotos
+                                                    </a>
+                                                </li>
+
+                                                <li>
+                                                    <a class="dropdown-item"
+                                                    :href="`/ordenes-trabajo/${workOrder.id_work_order}/visitas-view`">
+                                                        <i class="fas fa-route me-2 text-success"></i>
+                                                        Visitas
+                                                    </a>
+                                                </li>
+                                            @endif
 
 
-                                        {{-- ================= VER OT FINALIZADA (SOLO ADMIN) ================= --}}
-                                        @if ($isAdmin || $isAdminInstalador)
-                                            <li v-if="workOrder.status === 'completed'">
-                                                <a class="dropdown-item" href="#"
-                                                    @click.prevent="verOTFinalizada(workOrder.id_work_order)">
-                                                    <i class="fas fa-check-circle me-2 text-success"></i>
-                                                    Ver OT Finalizada
-                                                </a>
-                                            </li>
-                                        @endif
+                                            {{-- ================= VER PEDIDO (INSTALADOR + ADMIN) ================= --}}
+                                            @if ($isInstalador || $isAdmin || $isAdminInstalador)
+                                                <li>
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="verPedidoMaterialHgi(workOrder.id_work_order)">
+                                                        <i class="fas fa-file-alt me-2 text-warning"></i>
+                                                        Ver Pedido
+                                                    </a>
+                                                </li>
+                                            @endif
 
 
-                                        {{-- ================= VER FINANCIERO (ADMIN) ================= --}}
-                                        @if ($isAdmin || $isAdminInstalador)
-                                            <li v-if="workOrder.status === 'completed'">
-                                                <a class="dropdown-item" href="#"
-                                                    @click.prevent="verManoObra(workOrder.id_work_order, workOrder.pd_servicio)">
-                                                    <i class="fas fa-coins me-2 text-info"></i>
-                                                    Ver Financiero
-                                                </a>
-                                            </li>
-                                        @endif
+                                            {{-- ================= VER OT FINALIZADA (SOLO ADMIN) ================= --}}
+                                            @if ($isAdmin || $isAdminInstalador)
+                                                <li v-if="workOrder.status === 'completed'">
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="verOTFinalizada(workOrder.id_work_order)">
+                                                        <i class="fas fa-check-circle me-2 text-success"></i>
+                                                        Ver OT Finalizada
+                                                    </a>
+                                                </li>
+                                            @endif
 
 
-                                        {{-- ================= VER SOLICITUDES MATERIAL (ADMIN) ================= --}}
-                                        @if ($isAdmin || $isAdminInstalador)
-                                            <li v-if="workOrder.pedidos_materiales_count > 0">
-                                                <a class="dropdown-item" href="#"
-                                                    @click.prevent="irCargarSolicitud(workOrder.id_work_order)">
-                                                    <i class="fas fa-clipboard-list me-2 text-warning"></i>
-                                                    Ver Solicitudes Material
-                                                </a>
-                                            </li>
-                                        @endif
-
-                                        @if ($isAsesor)
-                                            <li>
-                                                <a class="dropdown-item" href="#"
-                                                    @click.prevent="verProgramacionOT(workOrder)">
-                                                    <i class="fas fa-eye me-2 text-info"></i>
-                                                    Ver Programación
-                                                </a>
-                                            </li>
-                                        @endif
-
-                                    </ul>
-                                </div>
-                            </td>
+                                            {{-- ================= VER FINANCIERO (ADMIN) ================= --}}
+                                            @if ($isAdmin || $isAdminInstalador)
+                                                <li v-if="workOrder.status === 'completed'">
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="verManoObra(workOrder.id_work_order, workOrder.pd_servicio)">
+                                                        <i class="fas fa-coins me-2 text-info"></i>
+                                                        Ver Financiero
+                                                    </a>
+                                                </li>
+                                            @endif
 
 
-                        </tr>
+                                            {{-- ================= VER SOLICITUDES MATERIAL (ADMIN) ================= --}}
+                                            @if ($isAdmin || $isAdminInstalador)
+                                                <li v-if="workOrder.pedidos_materiales_count > 0">
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="irCargarSolicitud(workOrder.id_work_order)">
+                                                        <i class="fas fa-clipboard-list me-2 text-warning"></i>
+                                                        Ver Solicitudes Material
+                                                    </a>
+                                                </li>
+                                            @endif
 
-                        <tr v-if="filteredWorkOrders.length === 0">
-                            <td colspan="7" class="px-2 py-6 text-center text-zinc-500">
-                                Sin resultados…
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                                            @if ($isAsesor || $isAdmin || $isAdminInstalador)
+                                                <li>
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="verProgramacionOT(workOrder)">
+                                                        <i class="fas fa-eye me-2 text-info"></i>
+                                                        Ver Programación
+                                                    </a>
+                                                </li>
+
+                                                <li>
+                                                    <a class="dropdown-item" href="#"
+                                                        @click.prevent="abrirModalPdAdicional(workOrder)">
+                                                        <i class="fas fa-plus-circle me-2 text-success"></i>
+                                                        Anexar PD Servicio
+                                                    </a>
+                                                </li>
+                                            @endif
+
+                                        </ul>
+                                    </div>
+                                </td>
+
+
+                            </tr>
+
+                            <tr v-if="filteredWorkOrders.length === 0">
+                                <td colspan="7" class="px-2 py-6 text-center text-zinc-500">
+                                    Sin resultados…
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -467,6 +502,55 @@
                                             </td>
                                             <td class="text-end fw-bold">
                                                 $ @{{ totalGlobal.toLocaleString('es-CO') }}
+                                            </td>
+                                        </tr>
+                                    @endif
+
+
+                                    <!-- ================= PD ADICIONALES ================= -->
+                                    <tr v-if="pdAdicionales.length" class="table-info">
+                                        <td colspan="{{ $isAdmin || $isAdminInstalador ? 7 : 3 }}"
+                                            class="fw-bold text-center">
+                                            ➕ PD Servicio Adicional
+                                        </td>
+                                    </tr>
+
+                                    <tr v-for="(p, index) in pdAdicionales" :key="'adicional-' + index">
+
+                                        <td>@{{ p.codigo_producto }}</td>
+
+                                        <td>@{{ p.producto }}</td>
+
+                                        <td class="text-center">
+                                            @{{ Number(p.cantidad).toFixed(2) }}
+                                        </td>
+
+                                        @if ($isAdmin || $isAdminInstalador)
+                                            <td class="text-end">
+                                                $ @{{ Number(p.valor_unitario).toLocaleString('es-CO') }}
+                                            </td>
+
+                                            <td class="text-end">
+                                                $ @{{ Number(p.subtotal).toLocaleString('es-CO') }}
+                                            </td>
+
+                                            <td class="text-end text-danger">
+                                                $ @{{ Number(p.valor_descuento).toLocaleString('es-CO') }}
+                                            </td>
+
+                                            <td class="text-end fw-bold text-success">
+                                                $ @{{ Number(p.total_con_descuento).toLocaleString('es-CO') }}
+                                            </td>
+                                        @endif
+                                    </tr>
+
+                                    @if ($isAdmin || $isAdminInstalador)
+                                        <tr v-if="pdAdicionales.length" class="table-secondary">
+                                            <td colspan="6" class="text-end fw-bold">
+                                                TOTAL PD ADICIONAL
+                                            </td>
+                                            <td class="text-end fw-bold">
+                                                $ @{{ totalAdicionales.toLocaleString('es-CO') }}
                                             </td>
                                         </tr>
                                     @endif
@@ -810,7 +894,50 @@
         </div>
         <!-- FIN Modal para programar la OT -->
 
+        <!-- MODAL ANEXAR PD ADICIONAL -->
+        <div v-if="mostrarPdAdicional" class="modal fade show d-block" style="background: rgba(0,0,0,0.6);">
 
+            <div class="modal-dialog modal-md modal-dialog-centered">
+                <div class="modal-content shadow-lg border-0">
+
+                    <div class="modal-header bg-dark text-white">
+                        <h5 class="modal-title">
+                            Anexar PD Servicio
+                        </h5>
+                        <button type="button" class="btn-close btn-close-white" @click="cerrarModalPdAdicional">
+                        </button>
+                    </div>
+
+                    <div class="modal-body">
+
+                        <div class="mb-3">
+                            <label class="form-label">Número PD</label>
+                            <input type="number" v-model="formPdAdicional.pd_agregado" class="form-control"
+                                placeholder="Digite número del PD">
+                        </div>
+
+                        <div>
+                            <label class="form-label">Observación</label>
+                            <textarea v-model="formPdAdicional.observacion" class="form-control" rows="3">
+                            </textarea>
+                        </div>
+
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" @click="cerrarModalPdAdicional">
+                            Cancelar
+                        </button>
+
+                        <button class="btn btn-dark" @click="guardarPdAdicional">
+                            Guardar
+                        </button>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+        <!-- FIN MODAL -->
 
 
 
@@ -882,12 +1009,22 @@
                             observacion_programacion: ""
                         },
 
+                        mostrarPdAdicional: false,
+
+                        formPdAdicional: {
+                            work_order_id: null,
+                            pd_agregado: "",
+                            tercero_id: "",
+                            vendedor_username: "",
+                            observacion: ""
+                        },
+                        calendar: null,
+                        showCalendar: false,
+
                     }
                 },
 
                 mounted() {
-
-
 
                     // Escuchar solicitudes de material EN TIEMPO REAL
                     const esperarEcho = setInterval(() => {
@@ -953,7 +1090,9 @@
                     pedidoServicio() {
                         const ot = this.workOrders.find(w => w.id_work_order === this.selectedWorkOrderId);
                         if (!ot) return [];
-                        return this.pedidoHgiAgrupado.filter(p => p.pedido != ot.pedido);
+                        return this.pedidoHgiAgrupado.filter(p =>
+                            p.pedido == ot.pd_servicio
+                        );
                     },
 
                     totalGlobal() {
@@ -967,7 +1106,24 @@
                     },
 
                     totalGeneral() {
-                        return this.totalGlobal + this.totalServicio;
+                        return this.totalGlobal + this.totalServicio + this.totalAdicionales;
+                    },
+
+                    pdAdicionales() {
+                        const ot = this.workOrders.find(
+                            w => w.id_work_order === this.selectedWorkOrderId
+                        );
+
+                        if (!ot) return [];
+
+                        return this.pedidoHgiAgrupado.filter(p =>
+                            p.pedido != ot.pedido && p.pedido != ot.pd_servicio
+                        );
+                    },
+
+                    totalAdicionales() {
+                        return this.pdAdicionales.reduce((acc, p) =>
+                            acc + Number(p.total_con_descuento), 0);
                     },
 
 
@@ -1008,6 +1164,23 @@
 
                 methods: {
 
+                    // Mostrar/ocultar calendario
+                    toggleCalendar() {
+
+                        this.showCalendar = !this.showCalendar;
+
+                        if (this.showCalendar) {
+                            this.$nextTick(() => {
+                                if (!this.calendar) {
+                                    this.initCalendar();
+                                } else {
+                                    this.calendar.refetchEvents(); // Actualizar eventos
+                                }
+                            });
+                        }
+
+                    },
+
 
                     limpiarNumero(valor) {
 
@@ -1031,7 +1204,7 @@
                     },
 
 
-
+                    // Mostrar modal de programación
                     abrirModalProgramacion(workOrder) {
 
                         this.formProgramacion = {
@@ -1044,6 +1217,7 @@
                         this.mostrarProgramacion = true;
                     },
 
+                    // Guardar programación
                     async guardarProgramacion() {
 
                         if (!this.formProgramacion.fecha_programada) {
@@ -1108,9 +1282,15 @@
                             'Programación actualizada',
                             'La programación fue guardada correctamente.'
                         );
+
+                        if (this.calendar) {
+                            setTimeout(() => {
+                                this.calendar.refetchEvents();
+                            }, 300);
+                        }
                     },
 
-
+                    // Ver programación
                     async verProgramacionOT(workOrder) {
 
                         try {
@@ -1120,7 +1300,7 @@
 
                             if (!resp.ok) {
                                 this.pushToast('danger', 'Error',
-                                'No se pudo obtener la programación.');
+                                    'No se pudo obtener la programación.');
                                 return;
                             }
 
@@ -1143,6 +1323,7 @@
                         }
                     },
 
+                    // Iniciar OT
                     async iniciarOT(id) {
 
                         if (!confirm("¿Desea iniciar esta orden de trabajo?")) return;
@@ -1175,14 +1356,18 @@
                         alert("Orden iniciada correctamente.");
                     },
 
+                    // Ir a asignar material
                     irAsignarMaterial(id) {
                         window.location.href = routeAsignarMaterial.replace(':id', id);
                     },
 
+
+                    // Mostrar notificaciones
                     toggleNotificaciones() {
                         this.mostrarNotificaciones = !this.mostrarNotificaciones;
                     },
 
+                    // Abrir notificacion
                     abrirNotificacion(n) {
 
                         fetch(`/notificaciones/${n.id}/leer`, {
@@ -1228,7 +1413,7 @@
                         this.toasts = this.toasts.filter(t => t.id !== id);
                     },
 
-
+                    // ver pedido material
                     verPedidoMaterial(id) {
                         window.location.href = routePedidoMaterial.replace(':id', id);
                     },
@@ -1502,10 +1687,186 @@
                                 'Ocurrió un problema al guardar.'
                             );
 
-                            console.error(error);
+                            //console.error(error);
                         }
-                    }
+                    },
 
+                    abrirModalPdAdicional(workOrder) {
+
+                        this.formPdAdicional = {
+                            work_order_id: workOrder.id_work_order,
+                            pd_agregado: "",
+                            tercero_id: workOrder.tercero_id,
+                            vendedor_username: workOrder.vendedor_username,
+                            observacion: ""
+                        };
+
+                        this.mostrarPdAdicional = true;
+                    },
+
+                    cerrarModalPdAdicional() {
+
+                        this.mostrarPdAdicional = false;
+
+                        this.formPdAdicional = {
+                            work_order_id: null,
+                            pd_agregado: "",
+                            tercero_id: "",
+                            vendedor_username: "",
+                            observacion: ""
+                        };
+                    },
+
+                    async guardarPdAdicional() {
+
+                        if (!this.formPdAdicional.pd_agregado) {
+                            this.pushToast('warning', 'Validación', 'Debe ingresar un número de PD.');
+                            return;
+                        }
+
+                        try {
+
+                            const resp = await fetch("{{ route('ordenes.anexar.pd') }}", {
+                                method: "POST",
+                                headers: {
+                                    "Content-Type": "application/json",
+                                    "X-CSRF-TOKEN": "{{ csrf_token() }}"
+                                },
+                                body: JSON.stringify(this.formPdAdicional)
+                            });
+
+                            const data = await resp.json();
+
+                            //  ERROR 422 (validación Laravel)
+                            if (resp.status === 422) {
+
+                                const errores = Object.values(data.errors).flat().join(" | ");
+
+                                this.pushToast(
+                                    'danger',
+                                    'Error de validación',
+                                    errores
+                                );
+
+                                return;
+                            }
+
+                            // ERROR 400 (throw new Exception)
+                            if (!resp.ok || data.success === false) {
+
+                                this.pushToast(
+                                    'danger',
+                                    'No se pudo anexar',
+                                    data.message || 'El PD no pertenece al cliente o asesor.'
+                                );
+
+                                return;
+                            }
+
+                            // ÉXITO
+                            this.pushToast(
+                                'success',
+                                'Correcto',
+                                data.message
+                            );
+
+                            this.cerrarModalPdAdicional();
+
+                        } catch (error) {
+
+                            this.pushToast(
+                                'danger',
+                                'Error inesperado',
+                                'Ocurrió un problema registrando el PD.'
+                            );
+
+
+                        }
+                    },
+
+
+                    initCalendar() {
+
+                        const calendarEl = document.getElementById('calendar');
+                        if (!calendarEl) return;
+
+                        if (this.calendar) return;
+
+                        this.calendar = new FullCalendar.Calendar(calendarEl, {
+
+                            initialView: 'dayGridMonth',
+                            locale: 'es',
+                            height: 650,
+
+                            headerToolbar: {
+                                left: 'prev,next today',
+                                center: 'title',
+                                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                            },
+
+                            editable: false, //  SOLO VISUAL
+                            selectable: false, //  NO SELECCIONA
+                            eventStartEditable: false,
+                            eventDurationEditable: false,
+
+                            events: (info, success) => {
+
+                                fetch(
+                                        `/ordenes-trabajo/calendario?start=${info.startStr}&end=${info.endStr}`)
+                                    .then(res => {
+                                        if (!res.ok) return [];
+                                        return res.json();
+                                    })
+                                    .then(data => {
+                                        if (!Array.isArray(data)) {
+                                            success([]);
+                                            return;
+                                        }
+                                        success(data);
+                                    })
+                                    .catch(() => {
+                                        success([]);
+                                    });
+                            },
+
+                            eventContent: function(arg) {
+
+                                const cliente = arg.event.extendedProps.cliente ?? '';
+                                const instalador = arg.event.extendedProps.instalador ?? '';
+                                const pedido = arg.event.extendedProps.pedido ?? '';
+                                const status = arg.event.extendedProps.status ?? '';
+
+                                let estado = '';
+
+                                if (status === 'pending') {
+                                    estado = 'Pendiente';
+                                }
+
+                                if (status === 'in_progress') {
+                                    estado = 'En progreso';
+                                }
+
+                                if (status === 'completed') {
+                                    estado = 'Finalizada';
+                                }
+
+                                return {
+                                    html: `
+                                        <div style="font-size:11px">
+                                            <b>${arg.event.title}</b><br>
+                                            Cliente: ${cliente}<br>
+                                            Instalador: ${instalador}<br>
+                                            PD: ${pedido}<br>
+                                            Estado: ${estado}
+                                        </div>
+                                    `
+                                };
+                            }
+
+                        });
+
+                        this.calendar.render();
+                    }
 
                 }
             }).mount("#app");

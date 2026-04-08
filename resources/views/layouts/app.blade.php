@@ -7,8 +7,11 @@
     <title>{{ $title ?? config('app.name', 'App') }}</title>
 
     {{-- Bootstrap --}}
-    <!--<link rel="stylesheet"
-          href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css"> -->
+    <link rel="stylesheet"
+          href="https://cdn.jsdelivr.net/npm/bootstrap@4.6.2/dist/css/bootstrap.min.css">
+
+    <link href="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.11/index.global.min.js"></script>
 
     {{-- Estilos base --}}
     <style>
@@ -61,19 +64,18 @@
 
         /* Links base */
         #app-sidebar nav a,
-        #app-sidebar nav button {
-            padding: .6rem .9rem !important;
+        #app-sidebar nav button:not(.btn) {
+            padding: .6rem .9rem;
             font-size: .875rem;
             border-radius: 6px;
-            color: #e5e7eb !important;
-            /* texto blanco */
-            background: transparent !important;
+            color: #e5e7eb;
+            background: transparent;
             transition: all .2s ease;
         }
 
         /* Hover */
         #app-sidebar nav a:hover,
-        #app-sidebar nav button:hover {
+        #app-sidebar nav button:not(.btn):hover {
             background: #374151 !important;
             color: #ffffff !important;
         }
@@ -220,7 +222,8 @@
 
             @if ($isAdmin || $isAdminInstalador)
                 {{-- Órdenes de trabajo --}}
-                @php$otActive = request()->routeIs('pedidos.materiales.*');
+                @php
+                request()->routeIs('pedidos.materiales.*');
                 @endphp
 
                 <!--<button type="button"

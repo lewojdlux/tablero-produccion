@@ -498,7 +498,7 @@ class PendingList extends Component
         ";
 
             Mail::html($mensaje, function ($msg) use ($asunto) {
-                $msg->to('sistemas1@dlux.com.co')->subject($asunto)->from('no-reply@dlux.com.co', 'Sistema Producción D-LUX');
+                $msg->to('produccion1@dlux.com.co')->subject($asunto)->from('no-reply@dlux.com.co', 'Sistema Producción D-LUX');
             });
 
             // Notificación

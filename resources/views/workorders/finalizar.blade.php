@@ -105,7 +105,9 @@
             </div>
 
             {{-- FORM NUEVA JORNADA --}}
-            <form @submit.prevent="submit" v-if="otAbierta && puedeRegistrarMasJornadas">
+            <form @submit.prevent="submit"
+                v-if="mostrarFormularioJornada 
+                && !(fechaInicioProgramada === fechaFinProgramada && jornadasRegistradas.length)">
 
                 <h5 class="fw-bold mb-4">Registrar nueva jornada</h5>
 
@@ -207,6 +209,12 @@
                         Guardar jornada
                     </button>
 
+
+                    <button type="button" class="btn btn-warning" @click="mostrarModalNovedad = true">
+                        Registrar Novedad
+                    </button>
+
+
                     <!-- Finalizar siempre visible -->
                     <button type="button" class="btn btn-danger" @click="finalizarOT">
                         Finalizar OT
@@ -262,6 +270,64 @@
             </div>
 
 
+            <div v-if="mostrarModalNovedad" class="modal fade show d-block" style="background: rgba(0,0,0,0.7);">
+
+                <div class="modal-dialog modal-md modal-dialog-centered">
+                    <div class="modal-content shadow-lg border-0">
+
+                        <div class="modal-header bg-warning">
+                            <h5 class="modal-title">Registrar Novedad</h5>
+                        </div>
+
+                        <div class="modal-body">
+
+                            <div class="mb-3">
+                                <label>Fecha afectada</label>
+                                <input type="date" class="form-control" v-model="formNovedad.fecha_afectada">
+                            </div>
+
+                            <div class="mb-3">
+                                <label>Tipo</label>
+                                <select class="form-control" v-model="formNovedad.tipo_novedad">
+                                    <option value="cliente_no_disponible">Cliente no disponible</option>
+                                    <option value="clima">Clima</option>
+                                    <option value="material_pendiente">Material pendiente</option>
+                                    <option value="otro">Otro</option>
+                                </select>
+                            </div>
+
+                            <div class="mb-3">
+                                <label>Observación</label>
+                                <textarea class="form-control" v-model="formNovedad.observacion"></textarea>
+                            </div>
+
+                            <div class="form-check mb-2">
+                                <input type="checkbox" class="form-check-input" v-model="formNovedad.reprogramar">
+                                <label class="form-check-label">Reprogramar</label>
+                            </div>
+
+                            <div v-if="formNovedad.reprogramar">
+                                <label>Nueva fecha</label>
+                                <input type="date" class="form-control" v-model="formNovedad.nueva_fecha">
+                            </div>
+
+                        </div>
+
+                        <div class="modal-footer">
+                            <button class="btn btn-secondary" @click="mostrarModalNovedad = false">
+                                Cancelar
+                            </button>
+
+                            <button class="btn btn-warning" @click="guardarNovedad">
+                                Guardar
+                            </button>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+
         </div>
     @endsection
 
@@ -291,48 +357,97 @@
                     const acompanantes = JSON.parse(el.dataset.acompanantes || '[]');
                     const perfil = Number(el.dataset.perfil);
                     const otStatus = el.dataset.otStatus;
-
+                    const fechaPendiente = ref(null);
                     const fechaInicioProgramada = el.dataset.fechaInicio;
-                    const fechaFinProgramada = el.dataset.fechaFin;
+                    const fechaFinProgramada = ref(el.dataset.fechaFin);;
                     const jornadasRegistradas = ref([]);
                     const jornadas = ref([]);
 
+                    const mostrarModalNovedad = ref(false);
+
+                    const formNovedad = ref({
+                        fecha_afectada: '',
+                        tipo_novedad: '',
+                        observacion: '',
+                        reprogramar: false,
+                        nueva_fecha: ''
+                    });
+
                     const puedeRegistrarMasJornadas = computed(() => {
 
-                        if (!jornadasRegistradas.value.length) {
-                            return true;
+                        if (!fechaFinProgramada.value) return true;
+
+                        const existePendiente = jornadasRegistradas.value.some(j =>
+                            !j.hora_fin || j.hora_fin === ''
+                        );
+
+                        if (existePendiente) {
+                            return false;
                         }
 
                         const ordenadas = [...jornadasRegistradas.value]
                             .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
 
+                        const ultimaFecha = ordenadas.length
+                            ? ordenadas[0].fecha
+                            : fechaInicioProgramada;
+
+                        return ultimaFecha <= fechaFinProgramada.value;
+                    });
+
+
+                    const mostrarFormularioJornada = computed(() => {
+
+                        if (!otAbierta) return false;
+
+                        // Si hay fecha pendiente por novedad, sí se permite
+                        if (fechaPendiente.value) return true;
+
+                        // Si la OT es de un solo día
+                        if (fechaInicioProgramada === fechaFinProgramada.value) {
+
+                            const existeJornadaEseDia = jornadasRegistradas.value.some(
+                                j => j.fecha === fechaInicioProgramada
+                            );
+
+                            // Si ya hay jornada ese día -> NO mostrar formulario
+                            return !existeJornadaEseDia;
+                        }
+
+                        // Si aún no hay jornadas registradas -> permitir primera
+                        if (!jornadasRegistradas.value.length) return true;
+
+                        // OT de varios días
+                        const ordenadas = [...jornadasRegistradas.value]
+                            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
                         const ultimaFecha = ordenadas[0].fecha;
 
-                        return ultimaFecha < fechaFinProgramada;
+                        return ultimaFecha < fechaFinProgramada.value;
+
                     });
 
 
                     function calcularFechaSiguiente() {
-                        let fechaDefault = fechaInicioProgramada;
-
-                        if (jornadasRegistradas.value.length > 0) {
-
-                            const ordenadas = [...jornadasRegistradas.value]
-                                .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-
-                            const ultimaFecha = ordenadas[0].fecha;
-
-                            const siguiente = new Date(ultimaFecha);
-                            siguiente.setDate(siguiente.getDate() + 1);
-
-                            fechaDefault = siguiente.toISOString().split('T')[0];
-
-                            if (fechaDefault > fechaFinProgramada) {
-                                fechaDefault = fechaFinProgramada;
-                            }
+                        // Si no hay jornadas, usar fecha programada inicio
+                        if (!jornadasRegistradas.value.length) {
+                            return fechaInicioProgramada;
                         }
 
-                        return fechaDefault;
+                        const ordenadas = [...jornadasRegistradas.value]
+                            .sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+
+                        const ultimaFecha = new Date(ordenadas[0].fecha);
+
+                        ultimaFecha.setDate(ultimaFecha.getDate() + 1);
+
+                        const siguiente = ultimaFecha.toISOString().split('T')[0];
+
+                        if (fechaFinProgramada.value && siguiente > fechaFinProgramada.value) {
+                            return null;
+                        }
+
+                        return siguiente;
                     }
 
                     const mostrarModalPendiente = ref(false);
@@ -374,8 +489,33 @@
 
                     onMounted(async () => {
                         await cargarJornadas();
+                        await verificarFechasPendientes();
+
+                        if (!mostrarFormularioJornada.value) {
+                            jornadas.value = [];
+                            return;
+                        }
+
+                        if (fechaPendiente.value) {
+                            jornadas.value = [{
+                                fecha: fechaPendiente.value,
+                                hora_inicio: '',
+                                hora_fin: '',
+                                observaciones: '',
+                                instaladores: [principal, ...acompanantes]
+                            }];
+                            return;
+                        }
+
+                        const siguiente = calcularFechaSiguiente();
+
+                        if (!siguiente) {
+                            jornadas.value = [];
+                            return;
+                        }
+
                         jornadas.value = [{
-                            fecha: calcularFechaSiguiente(),
+                            fecha: siguiente,
                             hora_inicio: '',
                             hora_fin: '',
                             observaciones: '',
@@ -408,7 +548,7 @@
                                 return;
                             }
 
-                            if (j.fecha > fechaFinProgramada) {
+                            if (j.fecha > fechaFinProgramada.value) {
                                 showAlert('warning', 'La fecha no puede superar la fecha final programada.');
                                 return;
                             }
@@ -430,8 +570,15 @@
                             await verificarJornadaPendiente();
 
 
+                            const siguiente = calcularFechaSiguiente();
+
+                            if (!siguiente) {
+                                jornadas.value = [];
+                                return;
+                            }
+
                             jornadas.value = [{
-                                fecha: calcularFechaSiguiente(),
+                                fecha: siguiente,
                                 hora_inicio: '',
                                 hora_fin: '',
                                 observaciones: '',
@@ -448,11 +595,11 @@
                     }
 
                     async function finalizarOT() {
-                        if (!installationNotes.value) {
+                        /*if (!installationNotes.value) {
 
                             showAlert('warning', 'Debe ingresar la descripción general.');
                             return;
-                        }
+                        }*/
 
                         if (!confirm('¿Finalizar la orden de trabajo?')) return;
 
@@ -578,6 +725,72 @@
                     }
 
 
+                    async function guardarNovedad() {
+
+                        if (!formNovedad.value.fecha_afectada) {
+                            showAlert('warning', 'Debe seleccionar la fecha afectada.');
+                            return;
+                        }
+
+                        if (!formNovedad.value.tipo_novedad) {
+                            showAlert('warning', 'Debe seleccionar el tipo de novedad.');
+                            return;
+                        }
+
+                        try {
+
+                            const res = await axios.post(
+                                `/ordenes-trabajo/${el.dataset.ordenId}/novedad`,
+                                formNovedad.value,
+                                {
+                                    headers: { 'X-CSRF-TOKEN': csrfToken }
+                                }
+                            );
+
+                            showAlert('success', res.data.message);
+
+                            mostrarModalNovedad.value = false;
+
+                            await cargarJornadas();
+                            await verificarFechasPendientes();
+
+                            // Resetear formulario
+                            formNovedad.value = {
+                                fecha_afectada: '',
+                                tipo_novedad: '',
+                                observacion: '',
+                                reprogramar: false,
+                                nueva_fecha: ''
+                            };
+
+                        } catch (e) {
+
+                            showAlert(
+                                'error',
+                                e.response?.data?.message || 'Error registrando novedad'
+                            );
+                        }
+                    }
+
+                    async function verificarFechasPendientes() {
+                        const res = await axios.get(
+                            `/ordenes-trabajo/${el.dataset.ordenId}/fechas-pendientes`
+                        );
+
+                        if (res.data.pendiente) {
+                            fechaPendiente.value = res.data.fecha_sugerida;
+
+                            jornadas.value = [{
+                                fecha: fechaPendiente.value,
+                                hora_inicio: '',
+                                hora_fin: '',
+                                observaciones: '',
+                                instaladores: [principal, ...acompanantes]
+                            }];
+                        }
+                    }
+
+
 
 
                     return {
@@ -600,6 +813,12 @@
                         fechaInicioProgramada,
                         fechaFinProgramada,
                         puedeRegistrarMasJornadas,
+                        mostrarModalNovedad,
+                        formNovedad,
+                        guardarNovedad,
+                        verificarFechasPendientes,
+                        fechaPendiente,
+                        mostrarFormularioJornada
                     };
                 }
             }).mount('#finalizarOT');

@@ -12,6 +12,9 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 
+use App\Mail\OrdenTrabajoAsignada;
+use Illuminate\Support\Facades\Mail;
+
 class OrderWorkService
 {
     protected OrderWorkRepository $orderWorkRepository;
@@ -56,7 +59,7 @@ class OrderWorkService
             throw new \Exception('La orden ya está registrada.');
         }
 
-        return $this->orderWorkRepository->createOrderWork([
+        $ot = $this->orderWorkRepository->createOrderWork([
             'n_documento' => $data['n_documento'],
             'pedido' => $data['n_documento'],
             'tercero' => $data['tercero'],
@@ -72,6 +75,17 @@ class OrderWorkService
             'description' => $data['obsv_pedido'],
             'usereg_ot' => Auth::user()->id,
         ]);
+
+         Mail::to('instalaciones@dlux.com.co')
+            ->send(new OrdenTrabajoAsignada($data));
+
+            //  Retornar
+            return $ot;
+    }
+
+    public function anexarPdAdicional(array $data, $usuario)
+    {
+        return $this->orderWorkRepository->anexarPdAdicional($data, $usuario);
     }
 
     /* función para obtener las órdenes de trabajo asignadas */
@@ -173,25 +187,31 @@ class OrderWorkService
                 throw new \Exception('La orden no tiene fechas programadas.');
             }
 
+            $fechaInicio = Carbon::parse($ot->fecha_programada);
+            $fechaFin = Carbon::parse($ot->fecha_programada_fin);
+
             $consecutivoBase = DB::table('orden_trabajo_jornadas')->where('orden_trabajo_id', $ordenTrabajoId)->count();
 
             foreach ($jornadas as $index => $jornada) {
-                // VALIDAR RANGO FECHAS
-                if ($jornada['fecha'] < $ot->fecha_programada) {
+                $fechaJornada = Carbon::parse($jornada['fecha']);
+
+                // 🔹 VALIDAR RANGO
+                if ($fechaJornada->lt($fechaInicio)) {
                     throw new \Exception('La fecha es menor a la fecha programada.');
                 }
 
-                if ($jornada['fecha'] > $ot->fecha_programada_fin) {
+                if ($fechaJornada->gt($fechaFin)) {
                     throw new \Exception('La fecha supera la fecha final programada.');
                 }
 
-                // VALIDAR DUPLICADO POR FECHA
-                $existe = DB::table('orden_trabajo_jornadas')->where('orden_trabajo_id', $ordenTrabajoId)->whereDate('fecha', $jornada['fecha'])->exists();
+                // 🔹 BLOQUEAR SI EXISTE NOVEDAD EN ESA FECHA
+                $existeNovedad = DB::table('orden_trabajo_novedades')->where('orden_trabajo_id', $ordenTrabajoId)->whereDate('fecha_afectada', $fechaJornada)->exists();
 
-                if ($existe) {
-                    throw new \Exception('Ya existe una jornada registrada para esta fecha.');
+                if ($existeNovedad) {
+                    throw new \Exception('Esta fecha tiene una novedad registrada y no puede ejecutarse.');
                 }
 
+                // 🔹 VALIDAR HORAS
                 $inicio = Carbon::parse($jornada['fecha'] . ' ' . $jornada['hora_inicio']);
 
                 $fin = null;
@@ -205,6 +225,20 @@ class OrderWorkService
                     }
 
                     $horasTrabajadas = round($inicio->diffInMinutes($fin) / 60, 2);
+
+                    // 🔹 VALIDAR TRASLAPE
+                    $traslape = DB::table('orden_trabajo_jornadas')
+                        ->where('orden_trabajo_id', $ordenTrabajoId)
+                        ->whereDate('fecha', $fechaJornada)
+                        ->whereNotNull('hora_fin')
+                        ->where(function ($query) use ($jornada) {
+                            $query->where('hora_inicio', '<', $jornada['hora_fin'])->where('hora_fin', '>', $jornada['hora_inicio']);
+                        })
+                        ->exists();
+
+                    if ($traslape) {
+                        throw new \Exception('Existe un traslape de horario con otra jornada registrada.');
+                    }
                 }
 
                 $numeroJornada = $consecutivoBase + $index + 1;
@@ -215,6 +249,7 @@ class OrderWorkService
                     $instaladores = json_decode($instaladores, true);
                 }
 
+                // 🔹 CREAR JORNADA
                 $this->orderWorkRepository->crearJornada([
                     'orden_trabajo_id' => $ordenTrabajoId,
                     'numero_jornada' => $numeroJornada,
@@ -228,6 +263,101 @@ class OrderWorkService
                 ]);
             }
         });
+    }
+
+    public function registrarNovedad(int $ordenId, array $data, int $userId)
+    {
+        DB::transaction(function () use ($ordenId, $data, $userId) {
+            $ot = DB::table('work_orders')->where('id_work_order', $ordenId)->first();
+
+            if (!$ot) {
+                throw new \Exception('Orden no encontrada.');
+            }
+
+            $fechaAfectada = \Carbon\Carbon::parse($data['fecha_afectada']);
+            $fechaInicio = \Carbon\Carbon::parse($ot->fecha_programada);
+            $fechaFin = \Carbon\Carbon::parse($ot->fecha_programada_fin);
+
+            if ($fechaAfectada->lt($fechaInicio) || $fechaAfectada->gt($fechaFin)) {
+                throw new \Exception('La fecha no está dentro del rango programado.');
+            }
+
+            // Validar reprogramación
+            if (!empty($data['reprogramar'])) {
+                if (empty($data['nueva_fecha'])) {
+                    throw new \Exception('Debe indicar la nueva fecha.');
+                }
+
+                $nuevaFecha = \Carbon\Carbon::parse($data['nueva_fecha']);
+
+                if ($nuevaFecha->lte($fechaAfectada)) {
+                    throw new \Exception('La nueva fecha debe ser mayor a la fecha afectada.');
+                }
+
+                // Solo extender si supera fecha final
+                if ($nuevaFecha->gt($fechaFin)) {
+                    DB::table('work_orders')
+                        ->where('id_work_order', $ordenId)
+                        ->update([
+                            'fecha_programada_fin' => $nuevaFecha->toDateString(),
+                        ]);
+                }
+            }
+
+            $this->orderWorkRepository->crearNovedad([
+                'orden_trabajo_id' => $ordenId,
+                'fecha_afectada' => $data['fecha_afectada'],
+                'tipo_novedad' => $data['tipo_novedad'],
+                'observacion' => $data['observacion'] ?? null,
+                'reprogramar' => $data['reprogramar'] ?? false,
+                'nueva_fecha' => $data['nueva_fecha'] ?? null,
+                'user_id' => $userId,
+            ]);
+        });
+    }
+
+    public function obtenerFechaPendiente(int $ordenId)
+    {
+        $ot = DB::table('work_orders')->where('id_work_order', $ordenId)->first();
+
+        if (!$ot) {
+            throw new \Exception('Orden no encontrada.');
+        }
+
+        $inicio = Carbon::parse($ot->fecha_programada);
+        $fin = Carbon::parse($ot->fecha_programada_fin);
+        $hoy = Carbon::today();
+
+        $limite = $hoy->gt($fin) ? $hoy : $fin;
+
+        $fechasConJornada = DB::table('orden_trabajo_jornadas')->where('orden_trabajo_id', $ordenId)->pluck('fecha')->toArray();
+
+        $fechasConNovedad = DB::table('orden_trabajo_novedades')->where('orden_trabajo_id', $ordenId)->pluck('fecha_afectada')->toArray();
+
+        for ($fecha = $inicio->copy(); $fecha->lte($limite); $fecha->addDay()) {
+            // Ignorar domingos automáticamente
+            if ($fecha->dayOfWeek === Carbon::SUNDAY) {
+                continue;
+            }
+
+            // No evaluar fechas futuras
+            if ($fecha->gt($hoy)) {
+                break;
+            }
+
+            $fechaStr = $fecha->toDateString();
+
+            if (!in_array($fechaStr, $fechasConJornada) && !in_array($fechaStr, $fechasConNovedad)) {
+                return [
+                    'pendiente' => true,
+                    'fecha_sugerida' => $fechaStr,
+                ];
+            }
+        }
+
+        return [
+            'pendiente' => false,
+        ];
     }
 
     // función para obtener el material de una orden de trabajo por ID
@@ -348,20 +478,76 @@ class OrderWorkService
 
         $solicitudTotal = $materiales->sum('total') ?? 0;
 
-        $servicios = $this->orderWorkRepository->getServicios($ordenTrabajo->pd_servicio);
+        $pdGlobal = $ordenTrabajo->pedido;
+        $pdServicio = $ordenTrabajo->pd_servicio;
 
-        $pedidoTotal = $servicios->sum('total') ?? 0;
+        $pdAdicionales = DB::table('work_order_pd_adicionales')->where('work_order_id', $id)->pluck('pd_agregado')->toArray();
+
+        $documentosOrdenados = [];
+
+        // 1️⃣ PD GLOBAL
+        if ($pdGlobal) {
+            $documentosOrdenados[] = $pdGlobal;
+        }
+
+        // 2️⃣ PD ADICIONALES
+        foreach ($pdAdicionales as $pd) {
+            if (!in_array($pd, $documentosOrdenados)) {
+                $documentosOrdenados[] = $pd;
+            }
+        }
+
+        // 3️⃣ PD SERVICIO (al final)
+        if ($pdServicio && !in_array($pdServicio, $documentosOrdenados)) {
+            $documentosOrdenados[] = $pdServicio;
+        }
+
+        // =====================
+        // TRAER SERVICIOS
+        // =====================
+
+        $servicios = $this->orderWorkRepository->getServiciosPorDocumentos($documentosOrdenados);
+
+        // =====================
+        // AGRUPAR RESPETANDO EL ORDEN
+        // =====================
+
+        $serviciosPorDocumento = collect();
+
+        foreach ($documentosOrdenados as $doc) {
+            $items = $servicios->where('pedido', $doc)->values();
+
+            if ($items->isNotEmpty()) {
+                $serviciosPorDocumento[$doc] = [
+                    'items' => $items,
+                    'total' => $items->sum('total'),
+                ];
+            }
+        }
+
+        $pedidoTotal = $servicios->where('StrLinea', 40)
+        ->sum('total') ?? 0;
 
         $utilidad = $pedidoTotal - $manoObraTotal - $solicitudTotal;
 
         $porcentajeUtilidad = $pedidoTotal > 0 ? round(($utilidad / $pedidoTotal) * 100, 2) : 0;
 
-        return compact('ordenTrabajo', 'manoObra', 'manoObraTotal', 'materiales', 'solicitudTotal', 'servicios', 'pedidoTotal', 'utilidad', 'porcentajeUtilidad');
+        return compact('ordenTrabajo', 'manoObra', 'manoObraTotal', 'materiales', 'solicitudTotal', 'servicios', 'pedidoTotal', 'utilidad', 'porcentajeUtilidad', 'serviciosPorDocumento');
     }
 
     // función para obtener el PD de servicio existente
     public function getPedidoHgiExistente(array $data)
     {
         return $this->orderWorkRepository->getPedidoHgiExistente($data);
+    }
+
+    public function findById($id)
+    {
+        return $this->orderWorkRepository->findById($id);
+    }
+
+    public function guardarFotos($orderId, $files)
+    {
+        return $this->orderWorkRepository->guardarFotos($orderId, $files);
     }
 }

@@ -91,6 +91,11 @@ class OrderWorkModel extends Model
     }
 
 
+    public function visitas()
+    {
+        return $this->hasMany(OrderWorkVisitaModel::class, 'order_work_id', 'id_work_order');
+    }
+
 
     /**
      * Scope para búsqueda (busca en varios campos)

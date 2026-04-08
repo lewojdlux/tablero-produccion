@@ -7,6 +7,10 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\Route;
 use Livewire\Livewire;
 
+use Illuminate\Support\Facades\Event;
+use App\Events\OrdenTrabajoFinalizada;
+use App\Listeners\EnviarNotificacionOTFinalizada;
+
 class AppServiceProvider extends ServiceProvider
 {
     /**
@@ -23,12 +27,10 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         //
-        Livewire::setUpdateRoute(function ($handle) {
-            return Route::post('/tablero-produccion/livewire/update', $handle);
-        });
+        Event::listen(
+            OrdenTrabajoFinalizada::class,
+            EnviarNotificacionOTFinalizada::class
+        );
 
-        Livewire::setScriptRoute(function ($handle) {
-            return Route::get('/custom/livewire/livewire.js', $handle);
-        });
     }
 }

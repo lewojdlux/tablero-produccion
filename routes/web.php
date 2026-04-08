@@ -14,12 +14,14 @@ use App\Http\Controllers\AsignarMaterialController;
 use App\Http\Controllers\SolicitudesController;
 use App\Http\Controllers\SeguimientoCrmController;
 use App\Http\Controllers\InstaladorController;
-
-
+use App\Http\Controllers\OrderWorkVisitaController;
+use Livewire\Livewire;
 
 Broadcast::routes([
     'middleware' => ['auth']
 ]);
+
+
 
 
 Route::middleware('guest')->group(function () {
@@ -34,7 +36,9 @@ Route::post('/logout', function (Request $request) {
     return to_route('login');
 })->middleware('auth')->name('logout');
 
-
+Route::middleware(['auth','perfil:1,2,5,6,7'])->group(function () {
+    Route::get('/ordenes-trabajo/calendario', [OrdenesTrabajoController::class, 'calendario']);
+});
 
 
 /**
@@ -68,7 +72,7 @@ Route::middleware(['auth', 'perfil:1,2,5,6'])
         // Rutas para órdenes de trabajo y pedidos de materiales
         Route::get('/ordenes-trabajo/asignar', [OrdenesTrabajoController::class, 'index'])->name('ordenes.trabajo.asignar');
         Route::get('/ordenes/pd-servicio', [OrdenesTrabajoController::class, 'buscarPDServicio']);
-
+        //Route::get('/ordenes-trabajo/calendario', [OrdenesTrabajoController::class, 'calendario']);
         Route::post('/ordenes-trabajo/asignar', [OrdenesTrabajoController::class, 'store'])->name('ordenes.trabajo.store');
         Route::get('/pedidos-materiales/{pedido}', [OrdenesTrabajoController::class, 'show'])->name('pedidos.materiales.show');
         Route::get('/ordenes-trabajo/crear', [OrdenesTrabajoController::class, 'create'])->name('workorders.create');
@@ -110,6 +114,8 @@ Route::middleware(['auth', 'perfil:1,2,5,6'])
 
         })->name('notificaciones.leer');
 
+
+
         // Rutas para solicitudes de materiales
         Route::get('/ordenes-trabajo/solicitudes', [SolicitudesController::class, 'solicitudes'])->name('solicitudes.index');
         Route::get('/ordenes-trabajo/solicitudes/crear/{id}', [SolicitudesController::class, 'create'])->name('solicitudes.create');
@@ -137,6 +143,11 @@ Route::middleware(['auth', 'perfil:1,2,5,6'])
 
 
         Route::get('/ordenes-trabajo/{id}/programacion',[OrdenesTrabajoController::class, 'obtenerProgramacion']);
+
+
+        Route::post('/ordenes-trabajo/anexar-pd',[OrdenesTrabajoController::class, 'anexarPdAdicional'])->name('ordenes.anexar.pd');
+
+
 
 
 });
@@ -273,7 +284,17 @@ Route::middleware(['auth', 'perfil:7'])
     Route::post('/ordenes-trabajo/asignar-instaladores',[OrdenesTrabajoController::class, 'asignarInstaladores']);
     Route::get('/ordenes-trabajo/{id}/instaladores', [OrdenesTrabajoController::class, 'instaladoresActuales']);
 
+    Route::post('/ordenes-trabajo/{id}/novedad',[OrdenesTrabajoController::class, 'registrarNovedad'])->name('workorders.novedad');
 
+    Route::get('/ordenes-trabajo/{orden}/fechas-pendientes',[OrdenesTrabajoController::class, 'fechasPendientes'])->name('workorders.fechasPendientes');
 
+    Route::get('/ordenes-trabajo/{id}/adjuntar-fotos', [OrdenesTrabajoController::class, 'formAdjuntarFotos'])->name('workorders.adjuntar.fotos');
+    Route::post('/ordenes-trabajo/{id}/adjuntar-fotos', [OrdenesTrabajoController::class, 'guardarFotos'])->name('workorders.guardar.fotos');
+    Route::delete('/ordenes-trabajo/foto/{id}', [OrdenesTrabajoController::class, 'eliminarFoto'])->name('workorders.fotos.eliminar');
+
+    Route::get('/ordenes-trabajo/{id}/visitas-view', [OrderWorkVisitaController::class, 'view']);
+    Route::get('/ordenes-trabajo/{id}/visitas', [OrderWorkVisitaController::class, 'index']);
+    Route::post('/ordenes-trabajo/{id}/visitas', [OrderWorkVisitaController::class, 'store']);
+    Route::delete('/ordenes-trabajo/visitas/{id}', [OrderWorkVisitaController::class, 'destroy']);
 
 });

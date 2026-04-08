@@ -25,11 +25,16 @@ use App\Models\User;
 use App\Services\OrderWorkService;
 
 use App\Events\MaterialSolicitadoEvent;
-
+use App\Notifications\OrdenTrabajoFinalizadaNotification;
 use App\Notifications\MaterialSolicitadoNotification;
 use App\Notifications\NewPedidoMaterial;
 
 use App\Exports\OrdenTrabajoFinancieroExport;
+use App\Livewire\Order\WorkOrders;
+use App\Models\OrderWorkFotoModel;
+use Illuminate\Support\Facades\Storage;
+
+use App\Events\OrdenTrabajoFinalizada;
 
 
 class OrdenesTrabajoController
@@ -101,6 +106,35 @@ class OrdenesTrabajoController
                 'success' => false,
                 'message' => $e->getMessage(),
             ]);
+        }
+    }
+
+    /* ===============================
+    = ANEXAR PD SERVICIO ADICIONAL
+    ================================= */
+    public function anexarPdAdicional(Request $request)
+    {
+        try {
+            $request->validate([
+                'work_order_id' => 'required|exists:work_orders,id_work_order',
+                'pd_agregado' => 'required|numeric',
+                'observacion' => 'nullable|string',
+            ]);
+
+            $this->orderWorkService->anexarPdAdicional($request->all(), Auth::user());
+
+            return response()->json([
+                'success' => true,
+                'message' => 'PD anexado correctamente.',
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(
+                [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ],
+                400,
+            );
         }
     }
 
@@ -200,33 +234,36 @@ class OrdenesTrabajoController
             $orden = OrderWorkModel::findOrFail($id);
 
             $fechaInicioActual = Carbon::parse($orden->fecha_programada);
-            $fechaFinActual    = Carbon::parse($orden->fecha_programada_fin);
+            $fechaFinActual = Carbon::parse($orden->fecha_programada_fin);
 
             $fechaInicioNueva = Carbon::parse($request->fecha_programada);
-            $fechaFinNueva    = Carbon::parse($request->fecha_programada_fin);
+            $fechaFinNueva = Carbon::parse($request->fecha_programada_fin);
 
             $jornadas = OrdenTrabajoJornadaModel::where('orden_trabajo_id', $id)->get();
 
             if ($jornadas->isNotEmpty()) {
-
                 // 1. No permitir cambiar fecha inicio
                 if (!$fechaInicioNueva->equalTo($fechaInicioActual)) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'No se puede modificar la fecha de inicio porque ya existen jornadas registradas.',
-                    ], 422);
+                    return response()->json(
+                        [
+                            'success' => false,
+                            'message' => 'No se puede modificar la fecha de inicio porque ya existen jornadas registradas.',
+                        ],
+                        422,
+                    );
                 }
 
                 // 2. No permitir reducir fecha fin si deja jornadas fuera
-                $existeFuera = OrdenTrabajoJornadaModel::where('orden_trabajo_id', $id)
-                    ->where('fecha', '>', $fechaFinNueva)
-                    ->exists();
+                $existeFuera = OrdenTrabajoJornadaModel::where('orden_trabajo_id', $id)->where('fecha', '>', $fechaFinNueva)->exists();
 
                 if ($existeFuera) {
-                    return response()->json([
-                        'success' => false,
-                        'message' => 'No se puede reducir la fecha final porque existen jornadas posteriores.',
-                    ], 422);
+                    return response()->json(
+                        [
+                            'success' => false,
+                            'message' => 'No se puede reducir la fecha final porque existen jornadas posteriores.',
+                        ],
+                        422,
+                    );
                 }
             }
 
@@ -330,15 +367,22 @@ class OrdenesTrabajoController
     {
         //
 
-        $materialName = $request->input('q');
-        $materials = $this->orderWorkService->getMaterialsByMaterialName($materialName);
-
-        return response()->json($materials);
         try {
             $materialName = $request->input('q');
             $materials = $this->orderWorkService->getMaterialsByMaterialName($materialName);
 
-            return response()->json($materials);
+            // convertir a array seguro
+            $materials = collect($materials)->map(function ($m) {
+                if (!empty($m->Imagen)) {
+                    $m->Imagen = base64_encode($m->Imagen);
+                } else {
+                    $m->Imagen = null;
+                }
+
+                return $m;
+            });
+
+            return response()->json($materials->values());
         } catch (\Exception $e) {
             // Manejo de errores
             return response()->view('errors.500', ['message' => $e->getMessage()], 500);
@@ -602,6 +646,34 @@ class OrdenesTrabajoController
         }
     }
 
+    public function registrarNovedad(Request $request, int $id)
+    {
+        try {
+            $request->validate([
+                'fecha_afectada' => 'required|date',
+                'tipo_novedad' => 'required|string',
+                'observacion' => 'nullable|string',
+                'reprogramar' => 'boolean',
+                'nueva_fecha' => 'nullable|date',
+            ]);
+
+            $this->orderWorkService->registrarNovedad($id, $request->all(), Auth::id());
+
+            return response()->json([
+                'type' => 'success',
+                'message' => 'Novedad registrada correctamente.',
+            ]);
+        } catch (\Throwable $e) {
+            return response()->json(
+                [
+                    'type' => 'error',
+                    'message' => $e->getMessage(),
+                ],
+                400,
+            );
+        }
+    }
+
     // Función para actualizar una jornada
     public function actualizarJornada(Request $request, $id)
     {
@@ -637,6 +709,23 @@ class OrdenesTrabajoController
         ]);
     }
 
+    public function fechasPendientes(int $orden)
+    {
+        try {
+            $data = $this->orderWorkService->obtenerFechaPendiente($orden);
+
+            return response()->json($data);
+        } catch (\Throwable $e) {
+            return response()->json(
+                [
+                    'pendiente' => false,
+                    'message' => $e->getMessage(),
+                ],
+                500,
+            );
+        }
+    }
+
     public function jornadaPendiente($id)
     {
         $ayer = now()->subDay()->toDateString();
@@ -655,58 +744,90 @@ class OrdenesTrabajoController
         try {
             $orden = OrderWorkModel::findOrFail($workorder);
 
-            // VALIDAR QUE TENGA JORNADAS
-            $jornadas = DB::table('orden_trabajo_jornadas')
-                ->where('orden_trabajo_id', $workorder)
-                ->get();
+            $fechaInicio = Carbon::parse($orden->fecha_programada);
+            $fechaFin = Carbon::parse($orden->fecha_programada_fin);
+
+            // Jornadas
+            $jornadas = DB::table('orden_trabajo_jornadas')->where('orden_trabajo_id', $workorder)->get();
 
             if ($jornadas->isEmpty()) {
-                return response()->json([
-                    'type' => 'error',
-                    'message' => 'No se puede finalizar la orden porque no tiene jornadas registradas.',
-                ], 422);
+                return response()->json(
+                    [
+                        'type' => 'error',
+                        'message' => 'No se puede finalizar la orden porque no tiene jornadas registradas.',
+                    ],
+                    422,
+                );
             }
 
-            $fechaInicio = Carbon::parse($orden->fecha_programada);
-            $fechaFin    = Carbon::parse($orden->fecha_programada_fin);
+            // validar jornadas incompletas
+            if ($jornadas->whereNull('hora_fin')->count()) {
+                return response()->json(
+                    [
+                        'type' => 'error',
+                        'message' => 'Hay jornadas sin finalizar.',
+                    ],
+                    422,
+                );
+            }
 
-            // Obtener fechas registradas
-            $fechasRegistradas = $jornadas->pluck('fecha')->unique()->toArray();
+            // Fechas con jornada
+            $fechasJornadas = $jornadas->pluck('fecha')->unique()->toArray();
 
-            // Generar rango completo
+            // Fechas con novedad
+            $fechasNovedades = DB::table('orden_trabajo_novedades')->where('orden_trabajo_id', $workorder)->pluck('fecha_afectada')->unique()->toArray();
+
             $periodo = CarbonPeriod::create($fechaInicio, $fechaFin);
 
             foreach ($periodo as $fecha) {
+                if ($fecha->dayOfWeek === Carbon::SUNDAY) {
+                    continue;
+                }
 
                 $fechaStr = $fecha->format('Y-m-d');
 
-                if (!in_array($fechaStr, $fechasRegistradas)) {
+                // Si existe novedad se omite
+                if (in_array($fechaStr, $fechasNovedades)) {
+                    continue;
+                }
 
-                    return response()->json([
-                        'type' => 'error',
-                        'message' => "No se puede finalizar. Falta registrar jornada para el día $fechaStr.",
-                    ], 422);
+                // Si no tiene jornada -> error
+                if (!in_array($fechaStr, $fechasJornadas)) {
+                    return response()->json(
+                        [
+                            'type' => 'error',
+                            'message' => "Falta registrar jornada laboral para el día $fechaStr.",
+                        ],
+                        422,
+                    );
                 }
             }
 
-            //  VALIDAR NOTAS
             $request->validate([
                 'installation_notes' => 'nullable|string',
             ]);
 
-            //  FINALIZAR
             $this->orderWorkService->finalizarOT(
-                $workorder,
-                now()->toDateTimeString(),
-                $request->installation_notes,
-                auth()->id()
-            );
+                $workorder, now()->toDateTimeString(),
+                $request->installation_notes ?? '',
+                auth()->id());
+
+            // -------- NOTIFICACIÓN --------
+            $asesor = User::where('identificador_asesor', $orden->codigo_asesor)->first();
+
+            if ($asesor) {
+                $asesor->notify(new OrdenTrabajoFinalizadaNotification($orden));
+            }
+
+            \Log::info('OT finalizada y notificación enviada', [
+                'ot' => $orden->id_work_order,
+                'asesor' => $asesor?->id
+            ]);
 
             return response()->json([
                 'type' => 'success',
                 'message' => 'Orden de trabajo finalizada correctamente.',
             ]);
-
         } catch (\Throwable $e) {
             return response()->json(
                 [
@@ -753,36 +874,23 @@ class OrdenesTrabajoController
         // =====================
         // TRAER PRINCIPAL
         // =====================
-        $principal = DB::table('orden_trabajo_jornadas as otj')
-            ->join('work_orders as wo', 'wo.id_work_order', '=', 'otj.orden_trabajo_id')
-            ->join('instalador as i', 'i.id_instalador', '=', 'wo.instalador_id')
-            ->where('otj.orden_trabajo_id', $id)
-            ->select('otj.fecha', 'otj.hora_inicio', 'otj.hora_fin', 'i.id_instalador', 'i.nombre_instalador', 'i.valor_hora')
-            ->get();
+        $principal = DB::table('orden_trabajo_jornadas as otj')->join('work_orders as wo', 'wo.id_work_order', '=', 'otj.orden_trabajo_id')->join('instalador as i', 'i.id_instalador', '=', 'wo.instalador_id')->where('otj.orden_trabajo_id', $id)->select('otj.fecha', 'otj.hora_inicio', 'otj.hora_fin', 'i.id_instalador', 'i.nombre_instalador', 'i.valor_hora')->get();
 
         // =====================
         // TRAER ACOMPAÑANTES
         // =====================
         $acompanantes = DB::table('orden_trabajo_jornadas as otj')
-        ->join('instalador as ia', function ($join) {
-            $join->whereRaw("
+            ->join('instalador as ia', function ($join) {
+                $join->whereRaw("
                 JSON_CONTAINS(
                     otj.acompanante_ot,
                     ia.id_instalador
                 )
             ");
-        })
-        ->where('otj.orden_trabajo_id', $id)
-        ->select(
-            'otj.fecha',
-            'otj.hora_inicio',
-            'otj.hora_fin',
-            'ia.id_instalador',
-            'ia.nombre_instalador',
-            'ia.valor_hora'
-        )
-        ->get();
-
+            })
+            ->where('otj.orden_trabajo_id', $id)
+            ->select('otj.fecha', 'otj.hora_inicio', 'otj.hora_fin', 'ia.id_instalador', 'ia.nombre_instalador', 'ia.valor_hora')
+            ->get();
 
         $detalle = collect();
 
@@ -839,20 +947,20 @@ class OrdenesTrabajoController
 
         $manoObraTotal = $manoObra->sum('total');
 
-        
-
         /// cálcular si tiene servicios adicionales a la OT
         $solicitudTotal =
             DB::table('work_orders_materials')
                 ->where('work_order_id', $id)
-                ->selectRaw('
+                ->selectRaw(
+                    '
                     CAST(
                         SUM(
                             IFNULL(cantidad,1) * IFNULL(ultimo_costo,0)
                         )
                     AS DECIMAL(18,2)
                     ) as total_material
-                ')
+                ',
+                )
                 ->value('total_material') ?? 0;
 
         //  Pedido HGI (línea 40)
@@ -911,7 +1019,6 @@ class OrdenesTrabajoController
         ];
 
         while ($inicio < $fin) {
-
             $actual = $inicio->copy();
             $inicio->addMinute();
 
@@ -920,55 +1027,42 @@ class OrdenesTrabajoController
 
             // ================= DOMINGO =================
             if ($dia == 0) {
-
                 if ($hora >= '06:00' && $hora < '19:00') {
                     $minutos['dominical_diurna']++;
                 } else {
                     $minutos['dominical_nocturna']++;
                 }
-
             }
 
             // ================= LUNES =================
             elseif ($dia == 1) {
-
                 if ($hora >= '07:00' && $hora < '16:00') {
                     $minutos['ordinaria']++;
-                }
-                elseif ($hora >= '16:00' && $hora < '19:00') {
+                } elseif ($hora >= '16:00' && $hora < '19:00') {
                     $minutos['extra_diurna']++;
-                }
-                else {
+                } else {
                     $minutos['extra_nocturna']++;
                 }
-
             }
 
             // ================= MARTES A VIERNES =================
             elseif ($dia >= 2 && $dia <= 5) {
-
                 if ($hora >= '07:00' && $hora < '17:00') {
                     $minutos['ordinaria']++;
-                }
-                elseif ($hora >= '17:00' && $hora < '19:00') {
+                } elseif ($hora >= '17:00' && $hora < '19:00') {
                     $minutos['extra_diurna']++;
-                }
-                else {
+                } else {
                     $minutos['extra_nocturna']++;
                 }
-
             }
 
             // ================= SÁBADO =================
             elseif ($dia == 6) {
-
                 if ($hora >= '06:00' && $hora < '19:00') {
                     $minutos['extra_diurna']++;
-                }
-                else {
+                } else {
                     $minutos['extra_nocturna']++;
                 }
-
             }
         }
 
@@ -1011,7 +1105,6 @@ class OrdenesTrabajoController
         ];
     }
 
-    
     // función para exportar el resumen financiero de una orden de trabajo a Excel
     public function exportarFinancieroExcel($id)
     {
@@ -1103,5 +1196,137 @@ class OrdenesTrabajoController
                 500,
             );
         }
+    }
+
+    // función para obtener el calendario de las órdenes de trabajo
+    public function calendario(Request $request)
+    {
+        try {
+
+            $user = Auth::user();
+            $perfil = $user->perfil_usuario_id;
+
+            $query = OrderWorkModel::select(
+                'id_work_order',
+                'n_documento',
+                'fecha_programada',
+                'fecha_programada_fin',
+                'status',
+                'instalador_id',
+                'tercero',
+                'pedido'
+            )
+            ->whereNotNull('fecha_programada');
+
+            if ($perfil == 7) {
+
+                $instalador = DB::table('instalador')
+                    ->where('identificador_usuario', $user->identificador_instalador)
+                    ->value('id_instalador'); // trae solo el valor
+
+                if ($instalador) {
+                    $query->where('instalador_id', $instalador);
+                }
+            }
+
+            $ordenes = $query->get();
+            $eventos = [];
+
+            foreach ($ordenes as $ot) {
+
+                // color básico
+                $color = '#6c757d';
+
+                if ($ot->status === 'pending') $color = '#dc3545';
+                if ($ot->status === 'in_progress') $color = '#ffc107';
+                if ($ot->status === 'completed') $color = '#198754';
+
+                $fechaFin = $ot->fecha_programada_fin ?? $ot->fecha_programada;
+
+                $eventos[] = [
+                    'id'    => $ot->id_work_order,
+                    'title' => 'OT #' . $ot->n_documento,
+                    'start' => $ot->fecha_programada,
+                    'end'   => $fechaFin = \Carbon\Carbon::parse($fechaFin)->addDay()->format('Y-m-d'),
+                    'color' => $color,
+                    'allDay'=> true,
+                    'extendedProps' => [
+                        'cliente' => $ot->tercero,
+                        'instalador' => $ot->instalador->nombre_instalador ?? '',
+                        'pedido' => $ot->pedido,
+                        'status'     => $ot->status
+                    ]
+                ];
+            }
+
+            return response()->json($eventos);
+        } catch (\Exception $e) {
+
+            \Log::error($e->getMessage());
+
+            return response()->json([
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function formAdjuntarFotos($id)
+    {
+        $orden = $this->orderWorkService->findById($id);
+
+        $fotos = \App\Models\OrderWorkFotoModel::where('order_work_id', $id)
+            ->get()
+            ->map(function ($f) {
+                return [
+                    'id' => $f->id,
+                    'url' => asset('storage/' . $f->ruta),
+                ];
+            });
+
+        return view('workorders.adjuntar_fotos', compact('orden', 'fotos'));
+    }
+
+    public function guardarFotos(Request $request, $id)
+    {
+        $request->validate([
+            'fotos' => 'required|array|max:5',
+            'fotos.*' => 'file|mimes:jpg,jpeg,png,mp4,mov,avi,webm|max:102400',
+        ]);
+
+
+        $this->orderWorkService->guardarFotos($id, $request->file('fotos'));
+
+        $fotos = \App\Models\OrderWorkFotoModel::where('order_work_id', $id)
+            ->get()
+            ->map(function ($f) {
+                return [
+                    'id' => $f->id,
+                    'url' => asset('storage/' . $f->ruta),
+                    'tipo' => $f->tipo,
+                ];
+            });
+
+        return response()->json([
+            'success' => true,
+            'fotos' => $fotos,
+        ]);
+    }
+
+    public function eliminarFoto($id)
+    {
+        $foto = OrderWorkFotoModel::findOrFail($id);
+
+   
+        // eliminar archivo físico
+         if (Storage::disk('public')->exists($foto->ruta)) {
+            Storage::disk('public')->delete($foto->ruta);
+        }
+
+        // eliminar de BD
+        $foto->delete();
+
+        return response()->json([
+            'success' => true,
+        ]);
     }
 }

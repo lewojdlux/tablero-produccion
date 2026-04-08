@@ -24,6 +24,7 @@ class User extends Authenticatable
         'perfil_usuario_id',
         'estado',
         'identificador_asesor',
+        'identificador_instalador',
         'password',
     ];
 

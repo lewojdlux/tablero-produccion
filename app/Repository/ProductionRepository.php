@@ -831,6 +831,7 @@ class ProductionRepository
                     ->from('TblDetalleDocumentos as dd')
                     ->join('TblProductos as pp', 'pp.StrIdProducto', '=', 'dd.StrProducto')
                     ->whereColumn('dd.IntDocumento', 't.IntDocumento')
+                    ->where('dd.IntTransaccion', 109)
                     ->where('pp.StrLinea', '40');
             })
 
@@ -855,6 +856,16 @@ class ProductionRepository
             ->orderByDesc('t.IntAno')
             ->orderByDesc('t.IntPeriodo')
             ->orderByDesc('t.IntDocumento');
+
+             // ─── DEBUG LOG ───────────────────────────────────────────
+            \Log::info('getOrdenesTrabajo DEBUG', [
+                'search'               => $search,
+                'vendedor'             => $vendedor,
+                'documentos_asignados' => $documentosAsignados,
+                'sql'                  => $query->toSql(),
+                'bindings'             => $query->getBindings(),
+                'total_results'        => $query->count(),
+            ]);
 
         // AQUÍ ESTABA EL PROBLEMA
         //return $search ? $query->get() : $query->paginate(50); //  paginado

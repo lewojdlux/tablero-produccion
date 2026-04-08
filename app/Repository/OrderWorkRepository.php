@@ -5,9 +5,11 @@ namespace App\Repository;
 use App\Models\OrdenTrabajoModel;
 use App\Models\MaterialModel;
 use App\Models\InstaladorModel;
+use App\Models\OrdenTrabajoNovedad;
+use App\Models\OrderWorkFotoModel;
 use App\Models\OrderWorkModel;
 use App\Models\WorkOrdersMaterialsModel;
-
+use Illuminate\Database\QueryException;
 use App\Models\User;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -37,6 +39,64 @@ class OrderWorkRepository
         return $this->orderWorkModel->create($data);
     }
 
+    /// registrar pd adicional
+    public function anexarPdAdicional(array $data, $usuario)
+    {
+        // Traer OT completa
+        $orden = DB::table('work_orders')
+            ->where('id_work_order', $data['work_order_id'])
+            ->first();
+
+
+        if (!$orden) {
+            throw new \Exception("Orden no encontrada.");
+        }
+
+        $pdValido = DB::connection('sqlsrv')
+            ->table('TblDocumentos as t')
+            ->where('t.IntDocumento', $data['pd_agregado'])
+            ->where('t.IntTransaccion', 109)
+            //->where('t.StrTercero', $orden->tercero)
+            ->where('t.StrDVendedor', $orden->codigo_asesor)
+            ->exists();
+
+        if (!$pdValido) {
+            throw new \Exception("El PD no pertenece al cliente o asesor de la OT.");
+        }
+
+        // Validar duplicado
+        $existe = DB::table('work_order_pd_adicionales')
+            ->where('work_order_id', $data['work_order_id'])
+            ->where('pd_agregado', $data['pd_agregado'])
+            ->exists();
+
+        if ($existe) {
+            throw new \Exception("Este PD ya fue anexado.");
+        }
+
+        // Insertar
+        try {
+            DB::table('work_order_pd_adicionales')->insert([
+                'work_order_id'       => $data['work_order_id'],
+                'pd_agregado'         => $data['pd_agregado'],
+                'asesor_hgi_id'       => $orden->codigo_asesor,
+                'usuario_registra_id' => $usuario->id,
+                'observacion'         => $data['observacion'] ?? null,
+                'fecha_registro'      => now(),
+            ]);
+
+        } catch (QueryException $e) {
+
+            // Error 1062 = duplicate entry (MySQL)
+            if ($e->getCode() == 23000) {
+                throw new \Exception("Este PD ya fue anexado a la orden.");
+            }
+
+            throw $e;
+        }
+    }
+
+
 
     // función para verificar si una orden de trabajo existe por # de documento
     public function existePorDocumento($documento)
@@ -60,6 +120,11 @@ class OrderWorkRepository
         return $orderWork->save();
     }
 
+
+    public function crearNovedad(array $data)
+    {
+        return OrdenTrabajoNovedad::create($data);
+    }
 
     /*  funcion para obtener las órdenes de trabajo asignadas  */
     public function getOrderAsignados($vendorId = null)
@@ -112,15 +177,36 @@ class OrderWorkRepository
 
         $documentos = [];
 
-        // 🔹 PD GLOBAL
+        //  PD GLOBAL
         if ($ot->pedido) {
             $documentos[] = $ot->pedido;
         }
 
-        // 🔹 PD SERVICIO (si existe)
+        //  PD SERVICIO (si existe)
         if ($ot->pd_servicio && $ot->pd_servicio != $ot->pedido) {
             $documentos[] = $ot->pd_servicio;
         }
+
+
+        //  PD ADICIONALES
+        $pdAdicionales = DB::table('work_order_pd_adicionales')
+            ->where('work_order_id', $pedidoId)
+            ->pluck('pd_agregado')
+            ->toArray();
+
+        foreach ($pdAdicionales as $pd) {
+            if (!in_array($pd, $documentos)) {
+                $documentos[] = $pd;
+            }
+        }
+
+        // SI NO HAY DOCUMENTOS
+        if (empty($documentos)) {
+            return [];
+        }
+
+
+
 
         return DB::connection('sqlsrv')
             ->table('TblDetalleDocumentos as d')
@@ -169,59 +255,49 @@ class OrderWorkRepository
     {
         $sql = "
             SELECT
-                p.StrIdProducto AS codigo,
-                p.StrDescripcion AS nombre,
-                p.StrParam1 AS ubicacion,
+            p.StrIdProducto AS codigo,
+            p.StrDescripcion AS nombre,
+            p.StrParam1 AS ubicacion,
+            img.Imagen,
 
-                ISNULL((
-                    SELECT SUM(s.IntSaldoI + s.IntEntradas - s.IntSalidas - s.IntSalidasT)
-                    FROM QrySaldosInv1 s
-                    WHERE s.StrProducto = p.StrIdProducto
-                    AND s.IntBodega = '01'
-                    AND s.IntAno = YEAR(GETDATE())
-                    AND s.IntPeriodo = MONTH(GETDATE())
-                    AND s.IntEmpresa = '01'
-                ),0) AS saldo_inventario,
+            ISNULL(inv.saldo_inventario,0) AS saldo_inventario,
+            ISNULL(res.saldo_reservado,0) AS saldo_reservado,
 
-                ISNULL((
-                    SELECT SUM(CASE
-                            WHEN sp.IntSaldoFinal > 0 THEN sp.IntSaldoFinal
-                            ELSE 0
-                        END)
-                    FROM QrySaldoPedidos sp
-                    WHERE sp.StrProducto = p.StrIdProducto
-                    AND sp.IntTransaccion = 109
-                    AND sp.IntPeriodo = MONTH(GETDATE())
-                    AND sp.IntAno = YEAR(GETDATE())
-                ),0) AS saldo_reservado,
-
-                -- AQUI ESTA LO QUE NECESITAS
-                (
-                    ISNULL((
-                        SELECT SUM(s.IntSaldoI + s.IntEntradas - s.IntSalidas - s.IntSalidasT)
-                        FROM QrySaldosInv1 s
-                        WHERE s.StrProducto = p.StrIdProducto
-                        AND s.IntBodega = '01'
-                        AND s.IntAno = YEAR(GETDATE())
-                        AND s.IntPeriodo = MONTH(GETDATE())
-                        AND s.IntEmpresa = '01'
-                    ),0)
-                    -
-                    ISNULL((
-                        SELECT SUM(CASE
-                                WHEN sp.IntSaldoFinal > 0 THEN sp.IntSaldoFinal
-                                ELSE 0
-                            END)
-                        FROM QrySaldoPedidos sp
-                        WHERE sp.StrProducto = p.StrIdProducto
-                        AND sp.IntTransaccion = 109
-                        AND sp.IntPeriodo = MONTH(GETDATE())
-                        AND sp.IntAno = YEAR(GETDATE())
-                    ),0)
-                ) AS saldo_disponible
+            ISNULL(inv.saldo_inventario,0) - ISNULL(res.saldo_reservado,0) AS saldo_disponible
 
             FROM TblProductos p
-            WHERE p.StrIdProducto LIKE ?
+
+            LEFT JOIN TblImagenes img
+                ON img.StrIdCodigo = p.StrIdProducto
+                AND img.StrTabla = 'TblProductos'
+
+            OUTER APPLY (
+                SELECT
+                    SUM(s.IntSaldoI + s.IntEntradas - s.IntSalidas - s.IntSalidasT) AS saldo_inventario
+                FROM QrySaldosInv1 s
+                WHERE s.StrProducto = p.StrIdProducto
+                AND s.IntBodega = '01'
+                AND s.IntAno = YEAR(GETDATE())
+                AND s.IntPeriodo = MONTH(GETDATE())
+                AND s.IntEmpresa = '01'
+            ) inv
+
+            OUTER APPLY (
+                SELECT
+                    SUM(CASE
+                        WHEN sp.IntSaldoFinal > 0 THEN sp.IntSaldoFinal
+                        ELSE 0
+                    END) AS saldo_reservado
+                FROM QrySaldoPedidos sp
+                WHERE sp.StrProducto = p.StrIdProducto
+                AND sp.IntTransaccion = 109
+                AND sp.IntPeriodo = MONTH(GETDATE())
+                AND sp.IntAno = YEAR(GETDATE())
+            ) res
+
+            WHERE
+                p.StrIdProducto LIKE ?
+                OR p.StrDescripcion LIKE ?
         ";
 
         return DB::connection('sqlsrv')->select($sql, [
@@ -368,6 +444,29 @@ class OrderWorkRepository
             ->get();
     }
 
+    public function getServiciosPorDocumentos(array $documentos)
+    {
+        if (empty($documentos)) {
+            return collect();
+        }
+
+        return DB::connection('sqlsrv')
+            ->table('TblDetalleDocumentos as d')
+            ->join('TblProductos as p', 'p.StrIdProducto', '=', 'd.StrProducto')
+            ->whereIn('d.IntDocumento', $documentos)
+            ->where('d.IntTransaccion', 109)
+            ->selectRaw("
+                d.IntDocumento as pedido,
+                p.StrLinea,
+                p.StrIdProducto as codigo,
+                p.StrDescripcion as descripcion,
+                d.IntCantidad as cantidad,
+                d.IntValorUnitario as valor_unitario,
+                (d.IntCantidad * d.IntValorUnitario) - ISNULL(d.IntValorDescuento,0) as total
+            ")
+            ->get();
+    }
+
     // función para obtener el PD de servicio existente
     public function getPedidoHgiExistente(array $data){
         return DB::connection('sqlsrv')
@@ -383,5 +482,27 @@ class OrderWorkRepository
         if (!$pdValido) {
             throw new \Exception('El PD de servicio no corresponde al cliente o asesor.');
         }
+    }
+
+
+    public function guardarFotos($orderId, $files)
+    {
+        if (!$files) return false;
+
+        foreach ($files as $file) {
+
+            $path = $file->store("ordenes_trabajo/$orderId", 'public');
+
+            $tipo = str_starts_with($file->getMimeType(), 'video') ? 'video' : 'imagen';
+
+            OrderWorkFotoModel::create([
+                'order_work_id' => $orderId,
+                'ruta' => $path,
+                'tipo' => $tipo,
+            ]);
+        }
+
+        return true;
+    
     }
 }

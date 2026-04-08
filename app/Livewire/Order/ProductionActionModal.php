@@ -502,7 +502,23 @@ class ProductionActionModal extends Component
                             'to' => $email,
                         ]);
 
-                        Notify::route('mail', $email)->notify(new ProductionStatusChanged(orderId: $order->id_production_order, nproduccion: $order->n_documento ?? 0, pedido: $order->pedido ?? 0, status: $this->nuevo_status, observacion: $this->observacion_produccion, fechaInicial: $this->fecha_inicial_produccion, horaInicial: $this->hora_inicio_produccion, fechaFinal: $this->fecha_final_produccion, horaFinal: $this->hora_fin_produccion, dias: $this->dias_produccion, horas: $this->horas_produccion, mins: $this->minutos_produccion, segs: $this->segundos_produccion, cantidadLuminarias: $this->cantidad_luminarias, luminariaNombre: $luminariaNombre, cambioPor: $changedBy));
+                        Notify::route('mail', $email)->notify(new ProductionStatusChanged(
+                            orderId: $order->id_production_order, 
+                            nproduccion: $order->n_documento ?? 0, 
+                            pedido: $order->pedido ?? 0, 
+                            status: $this->nuevo_status, 
+                            observacion: $this->observacion_produccion, 
+                            fechaInicial: $this->fecha_inicial_produccion, 
+                            horaInicial: $this->hora_inicio_produccion, 
+                            fechaFinal: $this->fecha_final_produccion, 
+                            horaFinal: $this->hora_fin_produccion, 
+                            dias: $this->dias_produccion, 
+                            horas: $this->horas_produccion, 
+                            mins: $this->minutos_produccion, 
+                            segs: $this->segundos_produccion, 
+                            cantidadLuminarias: $this->cantidad_luminarias, 
+                            luminariaNombre: $luminariaNombre, 
+                            cambioPor: $changedBy));
 
                         \Log::info('Notificación enviada OK.', [
                             'order_id' => $order->id_production_order,

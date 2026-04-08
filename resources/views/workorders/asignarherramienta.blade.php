@@ -5,11 +5,51 @@
         [v-cloak] {
             display: none;
         }
+
+        .material-item {
+            padding: 10px 12px;
+        }
+
+        .material-img img {
+            width: 70px;
+            height: 70px;
+            object-fit: cover;
+            border-radius: 6px;
+            border: 1px solid #ddd;
+        }
+
+        .material-name {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .material-code {
+            font-size: 12px;
+            color: #777;
+        }
+
+        .material-stock {
+            font-size: 12px;
+            margin-top: 2px;
+        }
+
+        .stock-ok {
+            color: #198754;
+            font-weight: 500;
+        }
+
+        .stock-no {
+            color: #dc3545;
+        }
+
+        .cantidad-input {
+            width: 70px;
+        }
     </style>
 
     <meta name="csrf-token" content="{{ csrf_token() }}">
 
-
+    <h2 class="text-lg font-semibold">Asignar Material</h2>
 
 
     <div id="asignar-herramienta-app" v-cloak data-order-id="{{ $orderId }}"
@@ -36,7 +76,7 @@
 
         {{-- Buscador autosuggest --}}
         <div class="d-flex align-items-center gap-2 mb-3">
-            <div class="position-relative" style="width:420px">
+            <div class="position-relative" style="width:760px">
                 <input v-model="query" @input="onInput" @keydown.arrow-down.prevent="focusNext"
                     @keydown.arrow-up.prevent="focusPrev" @keydown.enter.prevent="selectFocused" class="form-control"
                     placeholder="Buscar herramienta por nombre o código...">
@@ -44,25 +84,51 @@
                 <ul v-if="suggestions.length && showSuggestions" class="list-group position-absolute w-100 mt-1 shadow"
                     style="z-index:1055; max-height:280px; overflow:auto;">
 
-                    <li v-for="s in suggestions" :key="s.id" class="list-group-item">
+                    <li v-for="s in suggestions" :key="s.id"
+                        class="list-group-item material-item">
+                        <div class="d-flex align-items-center gap-3">
 
-                        <div class="d-flex align-items-center justify-content-between gap-2">
+                            <!-- IMAGEN -->
+                            <div class="material-img">
+                                <img v-if="s.imagen"
+                                    :src="'data:image/jpeg;base64,' + s.imagen">
+
+                                <img v-else src="/img/no-image.png">
+                            </div>
+
+                            <!-- INFO -->
                             <div class="flex-grow-1">
-                                <div class="fw-semibold">@{{ s.nombre }}</div>
-                                <div class="small text-muted">@{{ s.codigo }}</div>
+
+                                <div class="material-name">
+                                    @{{ s.nombre }}
+                                </div>
+
+                                <div class="material-code">
+                                    @{{ s.codigo }}
+                                </div>
+
+                                <div class="material-stock"
+                                    :class="s.saldo_disponible > 0 ? 'stock-ok' : 'stock-no'">
+
+                                    Disponible: @{{ parseInt(s.saldo_disponible) > 0 ? s.saldo_disponible : 0 }}
+
+                                </div>
                             </div>
-                            <div class="small"
-                                :class="s.saldo_disponible > 0 ? 'text-success' : 'text-danger'">
 
-                                Disponible: @{{ parseInt(s.saldo_disponible) > 0 ? s.saldo_disponible : 0 }}
+                            <!-- CONTROLES -->
+                            <div class="d-flex align-items-center gap-2">
+                                <input type="number"
+                                    min="1"
+                                    v-model.number="s._cantidad"
+                                    class="form-control cantidad-input">
+
+                                <button class="btn btn-success btn-sm"
+                                        :disabled="s.saldo_disponible <= 0"
+                                        @click="toggleSeleccion(s)">
+
+                                    @{{ s._selected ? 'Quitar' : 'Añadir' }}
+                                </button>
                             </div>
-
-                            <input type="number" min="1" v-model.number="s._cantidad"
-                                class="form-control form-control-sm" style="width:80px">
-
-                            <button class="btn btn-sm btn-success" :disabled="s.saldo_disponible <= 0" @click="toggleSeleccion(s)">
-                                @{{ s._selected ? 'Quitar' : 'Añadir' }}
-                            </button>
                         </div>
                     </li>
 
@@ -104,7 +170,7 @@
                     <tr v-for="item in herramientas" :key="item.id_work_order_material">
                         <td>@{{ item.material_id }}</td>
                         <td>@{{ item.cantidad }}</td>
-                        
+
                         @if ($isAdminInstalador)
                         <td>@{{ formatCurrency(item.ultimo_costo) }}</td>
                         @endif
@@ -324,12 +390,13 @@
                                 saldo_inventario: x.saldo_inventario,
                                 saldo_reservado: x.saldo_reservado,
                                 saldo_disponible: x.saldo_disponible,
+                                imagen: x.Imagen,
                                 _cantidad: 1,
                                 _selected: false
                             }));
                             this.showSuggestions = this.suggestions.length > 0;
                         } catch (err) {
-                           
+
                             this.suggestions = [];
                             this.showSuggestions = false;
                         }
@@ -454,7 +521,7 @@
                             this.herramientas = this.herramientas.filter(h => (h.id ?? h.id_material) !==
                                 item.id);
                         } catch (e) {
-                       
+
                             alert('Error al comunicarse con el servidor.');
                         }
                     },
@@ -534,7 +601,7 @@
 
 
                         } catch (e) {
-                          
+
                             alert('Error al comunicarse con el servidor.');
                         } finally {
                             this.pedidoSubmitting = false;
