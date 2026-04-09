@@ -4,8 +4,8 @@ namespace App\Console\Commands;
 
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use App\Repository\OrderWorkRepository;
-use Illuminate\Http\Client\Response;
 
 class SyncMateriales extends Command
 {
@@ -14,57 +14,106 @@ class SyncMateriales extends Command
 
     public function handle(OrderWorkRepository $repo)
     {
-        $this->info("Sync optimizado iniciado...");
+        $this->info("Sync iniciado...");
 
-    $chunkSize = 500;
-    $start = 1;
-    $totalProcesados = 0;
+        $chunkSize = 300; // balance óptimo
 
-    while (true) {
+        $url = config('services.sync.url');
+        $token = config('services.sync.token');
 
-        $end = $start + $chunkSize - 1;
+        if (!$url || !$token) {
+            $this->error("SYNC_URL o SYNC_TOKEN no configurados");
+            return Command::FAILURE;
+        }
+      
+        $lastId = '';
+        $total = 0;
 
-        $materials = $repo->getAllMaterials($start, $end);
+    
 
-        if (empty($materials)) {
-            break;
+        while (true) {
+
+            $startTime = microtime(true); // ⏱ medir tiempo
+
+            // 🔁 RETRY AUTOMÁTICO DEADLOCK
+            $attempt = 0;
+
+            while (true) {
+                try {
+                    $materials = $repo->getAllMaterials($lastId, $chunkSize);
+                    break;
+
+                } catch (\Illuminate\Database\QueryException $e) {
+
+                    if (str_contains($e->getMessage(), '40001')) {
+                        $attempt++;
+
+                        if ($attempt >= 3) {
+                            $this->error("Deadlock persistente en bloque, se omite");
+                            Log::error('Deadlock persistente', ['lastId' => $lastId]);
+                            continue 2;
+                        }
+
+                        $this->warn("Deadlock detectado, reintentando ($attempt/3)...");
+                        sleep(2);
+
+                    } else {
+                        throw $e;
+                    }
+                }
+            }
+
+            if (empty($materials)) break;
+
+            $data = [];
+
+            foreach ($materials as $m) {
+
+                $lastId = $m->codigo;
+
+                $data[] = [
+                    'codigo' => $m->codigo,
+                    'nombre' => $m->nombre,
+                    'ubicacion' => $m->ubicacion,
+                    'saldo_inventario' => (float) $m->saldo_inventario,
+                    'saldo_reservado' => (float) $m->saldo_reservado,
+                    'imagen' => null
+                ];
+            }
+
+            $this->info("Procesando desde ID: $lastId | Registros: " . count($materials));
+
+            try {
+                $response = Http::retry(3, 2000)
+                    ->timeout(120)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . $token
+                    ])
+                    ->post($url, ['data' => $data]);
+
+                if (!$response->successful()) {
+                    Log::error('SyncMateriales API error', [
+                        'lastId' => $lastId,
+                        'response' => $response->body()
+                    ]);
+                }
+
+            } catch (\Exception $e) {
+                Log::error('SyncMateriales HTTP error', [
+                    'lastId' => $lastId,
+                    'error' => $e->getMessage()
+                ]);
+            }
+
+            $total += count($materials);
+
+            // ⏱ tiempo del bloque
+            $duration = round(microtime(true) - $startTime, 2);
+            $this->info("Tiempo bloque: {$duration}s");
         }
 
-        $this->info("Procesando registros $start - $end");
+        $this->info("SYNC OK Total: $total");
 
-        $data = [];
-
-        foreach ($materials as $m) {
-            $data[] = [
-                'codigo' => $m->codigo,
-                'nombre' => $m->nombre,
-                'ubicacion' => $m->ubicacion,
-                'saldo_inventario' => $m->saldo_inventario,
-                'saldo_reservado' => $m->saldo_reservado,
-                'saldo_disponible' => $m->saldo_disponible,
-                'imagen' => null // 🔥 NO IMÁGENES
-            ];
-        }
-
-        try {
-
-            Http::withHeaders([
-                'Authorization' => 'Bearer ' . env('SYNC_TOKEN')
-            ])
-            ->timeout(120)
-            ->post(env('SYNC_URL'), [
-                'data' => $data
-            ]);
-
-        } catch (\Exception $e) {
-            $this->error("Error HTTP: " . $e->getMessage());
-            return;
-        }
-
-        $totalProcesados += count($materials);
-        $start += $chunkSize;
-    }
-
-    $this->info("SYNC COMPLETO ✅ Total: $totalProcesados");
+        return Command::SUCCESS;
     }
 }

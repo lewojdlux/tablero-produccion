@@ -11,6 +11,10 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('sync:materiales')
             ->everyFiveMinutes()
-            ->withoutOverlapping();
+            ->withoutOverlapping(10) // evita solapamientos por 10 min
+            ->runInBackground() // no bloquea otros procesos
+            
+            ->appendOutputTo(storage_path('logs/sync_materiales.log')) // log persistente
+            ->emailOutputOnFailure('sistemas1@dlux.com.co'); // alerta si falla
     }
 }
