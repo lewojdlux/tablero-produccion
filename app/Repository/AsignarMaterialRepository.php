@@ -15,10 +15,6 @@ use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use RuntimeException;
 
 
-
-
-
-
 class AsignarMaterialRepository
 {
     protected MaterialModel $model;
@@ -32,6 +28,8 @@ class AsignarMaterialRepository
         $this->orderWorkAsignado = $orderWorkAsignado;
     }
 
+
+    // Método para obtener el ID del instalador asociado al usuario autenticado
     public function obtenerInstaladorId(){
         $userId = Auth::id();
         if (! $userId) {
@@ -70,6 +68,8 @@ class AsignarMaterialRepository
                     ->paginate($perPage);
     }
 
+
+    // Método para obtener detalles de una orden de trabajo específica asignada al instalador del usuario autenticado
     public function getOrdenTrabajoMateriales($id){
         $instalador = $this->obtenerInstaladorId();
 
@@ -87,7 +87,7 @@ class AsignarMaterialRepository
 
     }
 
-
+    // Método para obtener los materiales asignados a una orden de trabajo específica
     public function getMaterialesAsignados($id){
 
 

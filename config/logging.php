@@ -127,6 +127,11 @@ return [
             'path' => storage_path('logs/laravel.log'),
         ],
 
+        'sync_woo' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/sync_woo.log'),
+            'level' => 'info',
+        ],
     ],
 
 ];

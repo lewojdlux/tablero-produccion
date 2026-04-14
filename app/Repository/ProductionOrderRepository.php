@@ -49,14 +49,14 @@ class ProductionOrderRepository
                 'approved_at'
             ]);
 
-            // 🔒 Si es ASESOR (perfil 5), solo sus órdenes
+            // Si es ASESOR (perfil 5), solo sus órdenes
             $perfil = (int) (Auth::user()->perfil_usuario_id ?? 0);
             if ($perfil === 5) {
                 $asesorCode = Auth::user()->identificador_asesor; // ← tu campo en users
                 $q->where('vendedor_username', $asesorCode);
             }
 
-            // 🔎 Buscador global
+            // Buscador global
             if (!empty($f['q'])) {
                 $term = trim($f['q']);
                 $q->where(function ($qq) use ($term) {

@@ -33,6 +33,35 @@
             border-radius: 50%;
             font-size: 14px;
         }
+
+
+        .preview-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 9999;
+        }
+
+        .preview-img {
+            max-width: 90%;
+            max-height: 90%;
+            border-radius: 10px;
+        }
+
+        .cerrar {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 30px;
+            cursor: pointer;
+        }
     </style>
 
     <div id="fotoApp" class="container py-4">
@@ -64,11 +93,11 @@
                         <div class="foto-card shadow-sm">
 
                             <template v-if="foto.tipo === 'imagen'">
-                                <img :src="foto.url">
+                                <img :src="foto.url" @click="abrirPreview(foto)">
                             </template>
 
                             <template v-else>
-                                <video :src="foto.url" controls style="width:100%; height:100%; object-fit:cover;"></video>
+                                <video :src="foto.url" controls style="width:100%; height:100%; object-fit:cover;" @click="abrirPreview(foto)"></video>
                             </template>
 
                             <button class="delete-btn" @click="eliminarRegistrada(foto.id)">
@@ -144,6 +173,18 @@
 
         </div>
 
+
+        <!-- MODAL PREVIEW -->
+        <div v-if="previewActiva" class="preview-modal" @click="cerrarPreview">
+
+            <span class="cerrar">✕</span>
+
+            <img v-if="previewTipo === 'imagen'" :src="previewUrl" class="preview-img">
+
+            <video v-else :src="previewUrl" controls autoplay class="preview-img"></video>
+
+        </div>
+
     </div>
 @endsection
 
@@ -168,7 +209,10 @@
                         fotosNuevas: [],
                         fotosGuardadas: Array.isArray(fotosGuardadas) ? fotosGuardadas : [],
                         loading: false,
-                        mensaje: ''
+                        mensaje: '',
+                        previewActiva: false,
+                        previewUrl: '',
+                        previewTipo: ''
                     }
                 },
 
@@ -270,7 +314,7 @@
                             if (data.success) {
                                 this.fotosGuardadas = data.fotos;
                                 this.fotosNuevas = [];
-                                this.mensaje = 'Archivos subidos correctamente ✅';
+                                this.mensaje = 'Archivos subidos correctamente';
                             }
 
                         } catch (error) {
@@ -278,6 +322,15 @@
                         }
 
                         this.loading = false;
+                    },
+
+                    abrirPreview(foto) {
+                        this.previewUrl = foto.url || foto.preview;
+                        this.previewTipo = foto.tipo;
+                        this.previewActiva = true;
+                    },
+                    cerrarPreview() {
+                        this.previewActiva = false;
                     }
 
                 }

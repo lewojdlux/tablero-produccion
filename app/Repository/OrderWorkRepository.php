@@ -205,9 +205,6 @@ class OrderWorkRepository
             return [];
         }
 
-
-
-
         return DB::connection('sqlsrv')
             ->table('TblDetalleDocumentos as d')
             ->join('TblProductos as p', 'p.StrIdProducto', '=', 'd.StrProducto')
@@ -306,7 +303,7 @@ class OrderWorkRepository
         ]);
     }
 
-
+    // función para obtener las órdenes de trabajo con filtros avanzados
 	public function getAllMaterials($lastId, $limit)
     {
         $limit = (int) $limit;
@@ -496,6 +493,7 @@ class OrderWorkRepository
             ->get();
     }
 
+    // función para obtener los servicios de una orden de trabajo por múltiples documentos
     public function getServiciosPorDocumentos(array $documentos)
     {
         if (empty($documentos)) {
@@ -536,7 +534,7 @@ class OrderWorkRepository
         }
     }
 
-
+    // función para guardar las fotos de una orden de trabajo
     public function guardarFotos($orderId, $files)
     {
         if (!$files) return false;

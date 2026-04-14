@@ -646,6 +646,8 @@ class OrdenesTrabajoController
         }
     }
 
+
+    // función para registrar una novedad en una orden de trabajo
     public function registrarNovedad(Request $request, int $id)
     {
         try {
@@ -709,6 +711,8 @@ class OrdenesTrabajoController
         ]);
     }
 
+
+    // función para obtener las fechas pendientes de una orden de trabajo (fechas sin jornada ni novedad)
     public function fechasPendientes(int $orden)
     {
         try {
@@ -726,6 +730,8 @@ class OrdenesTrabajoController
         }
     }
 
+
+    // función para verificar si hay una jornada pendiente del día anterior
     public function jornadaPendiente($id)
     {
         $ayer = now()->subDay()->toDateString();
@@ -1001,6 +1007,8 @@ class OrdenesTrabajoController
         ]);
     }
 
+
+    // función para calcular el pago de una jornada según las horas trabajadas y el tipo de día
     private function calcularPagoJornada($fecha, $horaInicio, $horaFin, $valorHora)
     {
         $inicio = Carbon::parse("$fecha $horaInicio");
@@ -1270,6 +1278,8 @@ class OrdenesTrabajoController
         }
     }
 
+
+    // función para mostrar el formulario de adjuntar fotos a una orden de trabajo
     public function formAdjuntarFotos($id)
     {
         $orden = $this->orderWorkService->findById($id);
@@ -1280,12 +1290,15 @@ class OrdenesTrabajoController
                 return [
                     'id' => $f->id,
                     'url' => asset('storage/' . $f->ruta),
+                    'tipo' => $f->tipo
                 ];
             });
 
         return view('workorders.adjuntar_fotos', compact('orden', 'fotos'));
     }
 
+
+    // función para guardar las fotos adjuntas a una orden de trabajo
     public function guardarFotos(Request $request, $id)
     {
         $request->validate([
@@ -1312,6 +1325,8 @@ class OrdenesTrabajoController
         ]);
     }
 
+
+    // función para eliminar una foto adjunta a una orden de trabajo
     public function eliminarFoto($id)
     {
         $foto = OrderWorkFotoModel::findOrFail($id);

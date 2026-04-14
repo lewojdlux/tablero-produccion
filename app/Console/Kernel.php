@@ -9,6 +9,8 @@ class Kernel extends ConsoleKernel
 {
     protected function schedule(Schedule $schedule)
     {
+
+        // Sincronización de materiales con ControLogistico cada 5 minutos
         $schedule->command('sync:materiales')
             ->everyFiveMinutes()
             ->withoutOverlapping(10) // evita solapamientos por 10 min
@@ -16,5 +18,14 @@ class Kernel extends ConsoleKernel
             
             ->appendOutputTo(storage_path('logs/sync_materiales.log')) // log persistente
             ->emailOutputOnFailure('sistemas1@dlux.com.co'); // alerta si falla
+
+        // Sincronización de materiales con WooCommerce cada 5 minutos
+        $schedule->command('sync:woo-materiales')
+            ->everyFiveMinutes()
+            ->withoutOverlapping(10)
+            ->runInBackground()
+            ->appendOutputTo(storage_path('logs/sync_woo.log'))
+            ->emailOutputOnFailure('sistemas1@dlux.com.co')
+            ->delay(now()->addMinutes(2));
     }
 }

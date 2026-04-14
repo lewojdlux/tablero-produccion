@@ -18,6 +18,7 @@ class CrmRepository
         $this->modelCrm = $modelCrm;
     }
 
+        
     public function listCrm(int $page, int $perPage, array $filters): array
     {
         $offset = ($page - 1) * $perPage;
@@ -44,13 +45,13 @@ class CrmRepository
         ];
     }
 
+    // Método para obtener totales de oportunidades por asesor
     public function totalesPorAsesor(array $filters): array
     {
         return $this->modelCrm::totalesPorAsesor($filters);
     }
 
     /* ===== KPIs ===== */
-
     public function kpiResumen(array $filters)
     {
         return $this->modelCrm::kpiResumen($filters);
