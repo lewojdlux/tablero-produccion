@@ -7,7 +7,9 @@
     <h3>Materiales</h3>
 
     <button @click="cargarMateriales">Cargar materiales</button>
-    <button @click="exportarExcel">Exportar Excel</button>
+    <a href="/exportar-productos" class="btn btn-success">
+        Exportar Excel REAL
+    </a>
 
     <table border="1" width="100%" v-if="materiales.length">
         <thead>
@@ -65,63 +67,6 @@ createApp({
             } catch (e) {
                 console.error(e);
             }
-        },
-
-        exportarExcel() {
-
-            if (!this.materiales.length) {
-                alert('No hay datos para exportar');
-                return;
-            }
-
-            // 2 COLUMNAS: codigo, saldo_disponible
-            let contenido = `
-                <table>
-                    <tbody>
-            `;
-
-            this.materiales.forEach(m => {
-                contenido += `
-                    <tr>
-                        <td>${m.codigo}</td>
-                        <td>${Math.round(m.saldo_disponible)}</td>
-                    </tr>
-                `;
-            });
-
-            contenido += `
-                    </tbody>
-                </table>
-            `;
-
-            const archivo = `
-                <html xmlns:o="urn:schemas-microsoft-com:office:office"
-                    xmlns:x="urn:schemas-microsoft-com:office:excel"
-                    xmlns="http://www.w3.org/TR/REC-html40">
-                <head>
-                    <meta charset="UTF-8">
-                </head>
-                <body>
-                    ${contenido}
-                </body>
-                </html>
-            `;
-
-            const blob = new Blob([archivo], {
-                type: 'application/vnd.ms-excel;charset=utf-8;'
-            });
-
-            const url = URL.createObjectURL(blob);
-
-            const link = document.createElement("a");
-            link.href = url;
-            link.download = "productos_importar.xls";
-
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-
-            URL.revokeObjectURL(url);
         }
     }
 

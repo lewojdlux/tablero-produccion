@@ -125,6 +125,7 @@ Route::middleware(['auth', 'perfil:1,2,5,6'])
 
         Route::get('/listar/materiales', [OrdenesTrabajoController::class, 'listarMateriales'])->name('materiales.all');
         Route::get('/materiales-all', [OrdenesTrabajoController::class, 'consultarMateriales']);
+        Route::get('/exportar-productos', [OrdenesTrabajoController::class, 'exportarExcel']);
 
     });
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Exports\OrdenTrabajoFinancieroExport;
+use App\Exports\ProductosExport;
 use App\Models\InstaladorModel;
 use App\Models\OrdenTrabajoJornadaModel;
 use App\Models\OrderWorkFotoModel;
@@ -1361,5 +1362,12 @@ class OrdenesTrabajoController
             'total' => count($data),
             'data' => $data,
         ]);
+    }
+
+    public function exportarExcel()
+    {
+        $data = $this->productionOrderService->getAllMaterials();
+
+        return Excel::download(new ProductosExport($data), 'productos.xlsx');
     }
 }

@@ -873,45 +873,46 @@ class ProductionRepository
     public function buscarMateriales()
     {
         return DB::connection('sqlsrv')->select("
-        SELECT 
-            p.StrIdProducto AS codigo,
-            p.StrDescripcion AS nombre,
-            p.StrParam1 AS ubicacion,
-
-            ISNULL(inv.saldo_inventario,0) AS saldo_inventario,
-            ISNULL(res.saldo_reservado,0) AS saldo_reservado,
-
-            -- RESTA DIRECTA EN SQL
-            ISNULL(inv.saldo_inventario,0) - ISNULL(res.saldo_reservado,0) AS saldo_disponible
-
-        FROM TblProductos p WITH (NOLOCK)
-
-        -- INVENTARIO
-        LEFT JOIN (
             SELECT 
-                s.StrProducto,
-                SUM(s.IntSaldoI + s.IntEntradas - s.IntSalidas - s.IntSalidasT) AS saldo_inventario
-            FROM QrySaldosInv1 s WITH (NOLOCK)
-            WHERE s.IntBodega = '01'
-            AND s.IntAno = YEAR(GETDATE())
-            AND s.IntPeriodo = MONTH(GETDATE())
-            AND s.IntEmpresa = '01'
-            GROUP BY s.StrProducto
-        ) inv ON inv.StrProducto = p.StrIdProducto
+                p.StrIdProducto AS codigo,
+                p.StrDescripcion AS nombre,
+                p.StrParam1 AS ubicacion,
+                p.IntPrecio1 AS precio_unitario,
 
-        -- RESERVAS
-        LEFT JOIN (
-            SELECT 
-                sp.StrProducto,
-                SUM(CASE WHEN sp.IntSaldoFinal > 0 THEN sp.IntSaldoFinal ELSE 0 END) AS saldo_reservado
-            FROM QrySaldoPedidos sp WITH (NOLOCK)
-            WHERE sp.IntTransaccion = 109
-            AND sp.IntPeriodo = MONTH(GETDATE())
-            AND sp.IntAno = YEAR(GETDATE())
-            GROUP BY sp.StrProducto
-        ) res ON res.StrProducto = p.StrIdProducto
+                ISNULL(inv.saldo_inventario,0) AS saldo_inventario,
+                ISNULL(res.saldo_reservado,0) AS saldo_reservado,
 
-        ORDER BY p.StrIdProducto
+                -- RESTA DIRECTA EN SQL
+                ISNULL(inv.saldo_inventario,0) - ISNULL(res.saldo_reservado,0) AS saldo_disponible
+
+            FROM TblProductos p WITH (NOLOCK)
+
+            -- INVENTARIO
+            LEFT JOIN (
+                SELECT 
+                    s.StrProducto,
+                    SUM(s.IntSaldoI + s.IntEntradas - s.IntSalidas - s.IntSalidasT) AS saldo_inventario
+                FROM QrySaldosInv1 s WITH (NOLOCK)
+                WHERE s.IntBodega = '01'
+                AND s.IntAno = YEAR(GETDATE())
+                AND s.IntPeriodo = MONTH(GETDATE())
+                AND s.IntEmpresa = '01'
+                GROUP BY s.StrProducto
+            ) inv ON inv.StrProducto = p.StrIdProducto
+
+            -- RESERVAS
+            LEFT JOIN (
+                SELECT 
+                    sp.StrProducto,
+                    SUM(CASE WHEN sp.IntSaldoFinal > 0 THEN sp.IntSaldoFinal ELSE 0 END) AS saldo_reservado
+                FROM QrySaldoPedidos sp WITH (NOLOCK)
+                WHERE sp.IntTransaccion = 109
+                AND sp.IntPeriodo = MONTH(GETDATE())
+                AND sp.IntAno = YEAR(GETDATE())
+                GROUP BY sp.StrProducto
+            ) res ON res.StrProducto = p.StrIdProducto
+
+            ORDER BY p.StrIdProducto
     ");
     }
 }
