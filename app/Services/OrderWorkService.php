@@ -2,22 +2,20 @@
 
 namespace App\Services;
 
+use App\Mail\OrdenTrabajoAsignada;
 use App\Models\OrderWorkModel;
-use Exception;
-
 use App\Repository\OrderWorkRepository;
 use App\Repository\ProductionRepository;
-
 use Carbon\Carbon;
+use Exception;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
-
-use App\Mail\OrdenTrabajoAsignada;
 use Illuminate\Support\Facades\Mail;
 
 class OrderWorkService
 {
     protected OrderWorkRepository $orderWorkRepository;
+
     protected ProductionRepository $productionRepository;
 
     public function __construct(OrderWorkRepository $orderWorkRepository, ProductionRepository $productionRepository)
@@ -76,11 +74,11 @@ class OrderWorkService
             'usereg_ot' => Auth::user()->id,
         ]);
 
-         Mail::to('instalaciones@dlux.com.co')
+        Mail::to('instalaciones@dlux.com.co')
             ->send(new OrdenTrabajoAsignada($data));
 
-            //  Retornar
-            return $ot;
+        //  Retornar
+        return $ot;
     }
 
     public function anexarPdAdicional(array $data, $usuario)
@@ -179,11 +177,11 @@ class OrderWorkService
         DB::transaction(function () use ($ordenTrabajoId, $jornadas, $userId) {
             $ot = DB::table('work_orders')->where('id_work_order', $ordenTrabajoId)->first();
 
-            if (!$ot) {
+            if (! $ot) {
                 throw new \Exception('Orden de trabajo no encontrada.');
             }
 
-            if (!$ot->fecha_programada || !$ot->fecha_programada_fin) {
+            if (! $ot->fecha_programada || ! $ot->fecha_programada_fin) {
                 throw new \Exception('La orden no tiene fechas programadas.');
             }
 
@@ -212,13 +210,13 @@ class OrderWorkService
                 }
 
                 // 🔹 VALIDAR HORAS
-                $inicio = Carbon::parse($jornada['fecha'] . ' ' . $jornada['hora_inicio']);
+                $inicio = Carbon::parse($jornada['fecha'].' '.$jornada['hora_inicio']);
 
                 $fin = null;
                 $horasTrabajadas = null;
 
-                if (!empty($jornada['hora_fin'])) {
-                    $fin = Carbon::parse($jornada['fecha'] . ' ' . $jornada['hora_fin']);
+                if (! empty($jornada['hora_fin'])) {
+                    $fin = Carbon::parse($jornada['fecha'].' '.$jornada['hora_fin']);
 
                     if ($fin->lte($inicio)) {
                         throw new \Exception('La hora final debe ser mayor a la hora inicial.');
@@ -253,7 +251,7 @@ class OrderWorkService
                 $this->orderWorkRepository->crearJornada([
                     'orden_trabajo_id' => $ordenTrabajoId,
                     'numero_jornada' => $numeroJornada,
-                    'acompanante_ot' => !empty($instaladores) ? $instaladores : null,
+                    'acompanante_ot' => ! empty($instaladores) ? $instaladores : null,
                     'fecha' => $jornada['fecha'],
                     'hora_inicio' => $jornada['hora_inicio'],
                     'hora_fin' => $jornada['hora_fin'] ?? null,
@@ -270,7 +268,7 @@ class OrderWorkService
         DB::transaction(function () use ($ordenId, $data, $userId) {
             $ot = DB::table('work_orders')->where('id_work_order', $ordenId)->first();
 
-            if (!$ot) {
+            if (! $ot) {
                 throw new \Exception('Orden no encontrada.');
             }
 
@@ -283,7 +281,7 @@ class OrderWorkService
             }
 
             // Validar reprogramación
-            if (!empty($data['reprogramar'])) {
+            if (! empty($data['reprogramar'])) {
                 if (empty($data['nueva_fecha'])) {
                     throw new \Exception('Debe indicar la nueva fecha.');
                 }
@@ -320,7 +318,7 @@ class OrderWorkService
     {
         $ot = DB::table('work_orders')->where('id_work_order', $ordenId)->first();
 
-        if (!$ot) {
+        if (! $ot) {
             throw new \Exception('Orden no encontrada.');
         }
 
@@ -347,7 +345,7 @@ class OrderWorkService
 
             $fechaStr = $fecha->toDateString();
 
-            if (!in_array($fechaStr, $fechasConJornada) && !in_array($fechaStr, $fechasConNovedad)) {
+            if (! in_array($fechaStr, $fechasConJornada) && ! in_array($fechaStr, $fechasConNovedad)) {
                 return [
                     'pendiente' => true,
                     'fecha_sugerida' => $fechaStr,
@@ -372,7 +370,7 @@ class OrderWorkService
         $ot = $this->orderWorkRepository->findById($workOrderId);
 
         // 🔹 Normalizar acompañantes
-        $acompanantesLimpios = collect($acompanantes)->map(fn($id) => (int) $id)->filter(fn($id) => $id !== $principal)->unique()->values()->toArray();
+        $acompanantesLimpios = collect($acompanantes)->map(fn ($id) => (int) $id)->filter(fn ($id) => $id !== $principal)->unique()->values()->toArray();
 
         DB::transaction(function () use ($ot, $principal, $acompanantesLimpios) {
             // Guardar principal
@@ -400,12 +398,12 @@ class OrderWorkService
         // =====================
         $acompanantes = DB::table('orden_trabajo_jornadas as otj')
             ->join('instalador as ia', function ($join) {
-                $join->whereRaw("
+                $join->whereRaw('
                 JSON_CONTAINS(
                     otj.acompanante_ot,
                     ia.id_instalador
                 )
-            ");
+            ');
             })
             ->where('otj.orden_trabajo_id', $id)
             ->select('otj.fecha', 'otj.hora_inicio', 'otj.hora_fin', 'ia.id_instalador', 'ia.nombre_instalador', 'ia.valor_hora')
@@ -438,7 +436,7 @@ class OrderWorkService
         // =====================
         $manoObra = $detalle
             ->groupBy(function ($item) {
-                return $item['id_instalador'] . '_' . $item['tipo'];
+                return $item['id_instalador'].'_'.$item['tipo'];
             })
             ->map(function ($items) {
                 return (object) [
@@ -462,7 +460,7 @@ class OrderWorkService
                 return $orden[$item->tipo] ?? 99;
             })
             ->values()
-            ->map(fn($item) => (object) $item);
+            ->map(fn ($item) => (object) $item);
 
         $manoObraTotal = $manoObra->sum('total') ?? 0;
         $materiales = $this->orderWorkRepository->getMateriales($id)->map(function ($m) {
@@ -492,13 +490,13 @@ class OrderWorkService
 
         // 2️⃣ PD ADICIONALES
         foreach ($pdAdicionales as $pd) {
-            if (!in_array($pd, $documentosOrdenados)) {
+            if (! in_array($pd, $documentosOrdenados)) {
                 $documentosOrdenados[] = $pd;
             }
         }
 
         // 3️⃣ PD SERVICIO (al final)
-        if ($pdServicio && !in_array($pdServicio, $documentosOrdenados)) {
+        if ($pdServicio && ! in_array($pdServicio, $documentosOrdenados)) {
             $documentosOrdenados[] = $pdServicio;
         }
 
@@ -526,7 +524,7 @@ class OrderWorkService
         }
 
         $pedidoTotal = $servicios->where('StrLinea', 40)
-        ->sum('total') ?? 0;
+            ->sum('total') ?? 0;
 
         $utilidad = $pedidoTotal - $manoObraTotal - $solicitudTotal;
 
@@ -541,11 +539,13 @@ class OrderWorkService
         return $this->orderWorkRepository->getPedidoHgiExistente($data);
     }
 
+    // función para obtener una orden de trabajo por ID
     public function findById($id)
     {
         return $this->orderWorkRepository->findById($id);
     }
 
+    // función para guardar las fotos de una orden de trabajo
     public function guardarFotos($orderId, $files)
     {
         return $this->orderWorkRepository->guardarFotos($orderId, $files);

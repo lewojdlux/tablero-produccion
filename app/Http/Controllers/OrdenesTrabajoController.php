@@ -2,48 +2,40 @@
 
 namespace App\Http\Controllers;
 
+use App\Exports\OrdenTrabajoFinancieroExport;
+use App\Models\InstaladorModel;
+use App\Models\OrdenTrabajoJornadaModel;
+use App\Models\OrderWorkFotoModel;
+use App\Models\OrderWorkModel;
+use App\Models\PedidoMaterialItemModel;
+use App\Models\PedidoMaterialModel;
+use App\Models\User;
+use App\Models\WorkOrdersMaterialsModel;
+use App\Notifications\NewPedidoMaterial;
+use App\Notifications\OrdenTrabajoFinalizadaNotification;
+use App\Services\OrderWorkService;
+use App\Services\ProductionOrderService;
+use Carbon\Carbon;
+use Carbon\CarbonPeriod;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Notification;
-
-use Carbon\Carbon;
-use Carbon\CarbonPeriod;
-
-use Maatwebsite\Excel\Facades\Excel;
-
-use App\Models\OrderWorkModel;
-use App\Models\OrdenTrabajoModel;
-use App\Models\OrdenTrabajoJornadaModel;
-use App\Models\InstaladorModel;
-use App\Models\PedidoMaterialModel;
-use App\Models\PedidoMaterialItemModel;
-use App\Models\WorkOrdersMaterialsModel;
-use App\Models\User;
-
-use App\Services\OrderWorkService;
-
-use App\Events\MaterialSolicitadoEvent;
-use App\Notifications\OrdenTrabajoFinalizadaNotification;
-use App\Notifications\MaterialSolicitadoNotification;
-use App\Notifications\NewPedidoMaterial;
-
-use App\Exports\OrdenTrabajoFinancieroExport;
-use App\Livewire\Order\WorkOrders;
-use App\Models\OrderWorkFotoModel;
 use Illuminate\Support\Facades\Storage;
-
-use App\Events\OrdenTrabajoFinalizada;
-
+use Maatwebsite\Excel\Facades\Excel;
 
 class OrdenesTrabajoController
 {
     protected OrderWorkService $orderWorkService;
 
-    public function __construct(OrderWorkService $orderWorkService)
+    protected ProductionOrderService $productionOrderService;
+
+    public function __construct(OrderWorkService $orderWorkService, ProductionOrderService $productionOrderService)
     {
         $this->orderWorkService = $orderWorkService;
+        $this->productionOrderService = $productionOrderService;
+
     }
 
     /**
@@ -97,6 +89,7 @@ class OrdenesTrabajoController
     {
         try {
             $ot = $this->orderWorkService->createOrderWork($request->all());
+
             return response()->json([
                 'success' => true,
                 'data' => $ot,
@@ -171,7 +164,7 @@ class OrdenesTrabajoController
         $user = Auth::user();
         $rolesPermitidos = [1, 2, 6, 7];
 
-        if (!in_array((int) $user->perfil_usuario_id, $rolesPermitidos, true)) {
+        if (! in_array((int) $user->perfil_usuario_id, $rolesPermitidos, true)) {
             return response()->json(
                 [
                     'message' => 'No autorizado',
@@ -243,7 +236,7 @@ class OrdenesTrabajoController
 
             if ($jornadas->isNotEmpty()) {
                 // 1. No permitir cambiar fecha inicio
-                if (!$fechaInicioNueva->equalTo($fechaInicioActual)) {
+                if (! $fechaInicioNueva->equalTo($fechaInicioActual)) {
                     return response()->json(
                         [
                             'success' => false,
@@ -373,7 +366,7 @@ class OrdenesTrabajoController
 
             // convertir a array seguro
             $materials = collect($materials)->map(function ($m) {
-                if (!empty($m->Imagen)) {
+                if (! empty($m->Imagen)) {
                     $m->Imagen = base64_encode($m->Imagen);
                 } else {
                     $m->Imagen = null;
@@ -395,7 +388,7 @@ class OrdenesTrabajoController
         try {
             $deleted = WorkOrdersMaterialsModel::where('id_work_order_material', $womId)->where('work_order_id', $orderId)->where('material_id', $materialId)->delete();
 
-            if (!$deleted) {
+            if (! $deleted) {
                 return response()->json([
                     'success' => false,
                     'message' => 'No se encontró el material para eliminar.',
@@ -435,7 +428,7 @@ class OrdenesTrabajoController
             // 1 SOLO PEDIDO POR OT + INSTALADOR
             $pedido = PedidoMaterialModel::where('orden_trabajo_id', $request->orden_trabajo_id)->where('instalador_id', $instalador->id_instalador)->where('status', 'queued')->first();
 
-            if (!$pedido) {
+            if (! $pedido) {
                 $pedido = PedidoMaterialModel::create([
                     'orden_trabajo_id' => $request->orden_trabajo_id,
                     'instalador_id' => $instalador->id_instalador,
@@ -544,6 +537,7 @@ class OrdenesTrabajoController
     {
         try {
             $materials = $this->orderWorkService->getMaterialsByOrderId($id);
+
             return response()->json($materials);
         } catch (\Exception $e) {
             return response()->json(
@@ -579,7 +573,7 @@ class OrdenesTrabajoController
             $principal = $ordenTrabajo->instalador_id;
 
             // 🔹 Acompañantes
-            $acompanantes = $ordenTrabajo->acompanantes->pluck('id_instalador')->map(fn($id) => (int) $id)->toArray();
+            $acompanantes = $ordenTrabajo->acompanantes->pluck('id_instalador')->map(fn ($id) => (int) $id)->toArray();
 
             return view('workorders.finalizar', [
                 'ordenTrabajo' => $ordenTrabajo,
@@ -611,10 +605,10 @@ class OrdenesTrabajoController
                 'jornadas' => 'required|array|min:1',
                 'jornadas.*.fecha' => 'required|date',
                 'jornadas.*.hora_inicio' => 'required',
-                //'jornadas.*.hora_fin' => 'required',
+                // 'jornadas.*.hora_fin' => 'required',
                 'jornadas.*.observaciones' => 'nullable|string',
                 'jornadas.*.instaladores' => 'nullable|array',
-                //'installation_notes' => 'required|string|min:10',
+                // 'installation_notes' => 'required|string|min:10',
             ]);
 
             // 2️⃣ Finalizar OT (estado general)
@@ -645,7 +639,6 @@ class OrdenesTrabajoController
             );
         }
     }
-
 
     // función para registrar una novedad en una orden de trabajo
     public function registrarNovedad(Request $request, int $id)
@@ -686,8 +679,8 @@ class OrdenesTrabajoController
 
         $jornada = OrdenTrabajoJornadaModel::findOrFail($id);
 
-        $inicio = \Carbon\Carbon::parse($jornada->fecha . ' ' . $request->hora_inicio);
-        $fin = \Carbon\Carbon::parse($jornada->fecha . ' ' . $request->hora_fin);
+        $inicio = \Carbon\Carbon::parse($jornada->fecha.' '.$request->hora_inicio);
+        $fin = \Carbon\Carbon::parse($jornada->fecha.' '.$request->hora_fin);
 
         if ($fin->lte($inicio)) {
             return response()->json(
@@ -711,7 +704,6 @@ class OrdenesTrabajoController
         ]);
     }
 
-
     // función para obtener las fechas pendientes de una orden de trabajo (fechas sin jornada ni novedad)
     public function fechasPendientes(int $orden)
     {
@@ -729,7 +721,6 @@ class OrdenesTrabajoController
             );
         }
     }
-
 
     // función para verificar si hay una jornada pendiente del día anterior
     public function jornadaPendiente($id)
@@ -798,7 +789,7 @@ class OrdenesTrabajoController
                 }
 
                 // Si no tiene jornada -> error
-                if (!in_array($fechaStr, $fechasJornadas)) {
+                if (! in_array($fechaStr, $fechasJornadas)) {
                     return response()->json(
                         [
                             'type' => 'error',
@@ -827,7 +818,7 @@ class OrdenesTrabajoController
 
             \Log::info('OT finalizada y notificación enviada', [
                 'ot' => $orden->id_work_order,
-                'asesor' => $asesor?->id
+                'asesor' => $asesor?->id,
             ]);
 
             return response()->json([
@@ -869,13 +860,13 @@ class OrdenesTrabajoController
         $perfilAutorizado = [1, 2, 6]; // ADMIN, SUPER y ASESOR
 
         // Seguridad extra por backend
-        if (!in_array($user->perfil_usuario_id, $perfilAutorizado)) {
+        if (! in_array($user->perfil_usuario_id, $perfilAutorizado)) {
             abort(403);
         }
 
         $ordenTrabajo = OrderWorkModel::findOrFail($id);
         $pedido = $ordenTrabajo->pd_servicio;
-        //$pedido = $request->pedido;
+        // $pedido = $request->pedido;
 
         // =====================
         // TRAER PRINCIPAL
@@ -887,12 +878,12 @@ class OrdenesTrabajoController
         // =====================
         $acompanantes = DB::table('orden_trabajo_jornadas as otj')
             ->join('instalador as ia', function ($join) {
-                $join->whereRaw("
+                $join->whereRaw('
                 JSON_CONTAINS(
                     otj.acompanante_ot,
                     ia.id_instalador
                 )
-            ");
+            ');
             })
             ->where('otj.orden_trabajo_id', $id)
             ->select('otj.fecha', 'otj.hora_inicio', 'otj.hora_fin', 'ia.id_instalador', 'ia.nombre_instalador', 'ia.valor_hora')
@@ -925,7 +916,7 @@ class OrdenesTrabajoController
         // =====================
         $manoObra = $detalle
             ->groupBy(function ($item) {
-                return $item['id_instalador'] . '_' . $item['tipo'];
+                return $item['id_instalador'].'_'.$item['tipo'];
             })
             ->map(function ($items) {
                 return (object) [
@@ -949,11 +940,11 @@ class OrdenesTrabajoController
                 return $orden[$item->tipo] ?? 99;
             })
             ->values()
-            ->map(fn($item) => (object) $item);
+            ->map(fn ($item) => (object) $item);
 
         $manoObraTotal = $manoObra->sum('total');
 
-        /// cálcular si tiene servicios adicionales a la OT
+        // / cálcular si tiene servicios adicionales a la OT
         $solicitudTotal =
             DB::table('work_orders_materials')
                 ->where('work_order_id', $id)
@@ -1006,7 +997,6 @@ class OrdenesTrabajoController
             'porcentaje_utilidad' => $porcentajeUtilidad,
         ]);
     }
-
 
     // función para calcular el pago de una jornada según las horas trabajadas y el tipo de día
     private function calcularPagoJornada($fecha, $horaInicio, $horaFin, $valorHora)
@@ -1120,7 +1110,7 @@ class OrdenesTrabajoController
             // Validar que la OT exista
             $orden = \DB::table('work_orders')->where('id_work_order', $id)->first();
 
-            if (!$orden) {
+            if (! $orden) {
                 return redirect()->back()->with('error', 'La orden de trabajo no existe.');
             }
 
@@ -1224,7 +1214,7 @@ class OrdenesTrabajoController
                 'tercero',
                 'pedido'
             )
-            ->whereNotNull('fecha_programada');
+                ->whereNotNull('fecha_programada');
 
             if ($perfil == 7) {
 
@@ -1245,25 +1235,31 @@ class OrdenesTrabajoController
                 // color básico
                 $color = '#6c757d';
 
-                if ($ot->status === 'pending') $color = '#dc3545';
-                if ($ot->status === 'in_progress') $color = '#ffc107';
-                if ($ot->status === 'completed') $color = '#198754';
+                if ($ot->status === 'pending') {
+                    $color = '#dc3545';
+                }
+                if ($ot->status === 'in_progress') {
+                    $color = '#ffc107';
+                }
+                if ($ot->status === 'completed') {
+                    $color = '#198754';
+                }
 
                 $fechaFin = $ot->fecha_programada_fin ?? $ot->fecha_programada;
 
                 $eventos[] = [
-                    'id'    => $ot->id_work_order,
-                    'title' => 'OT #' . $ot->n_documento,
+                    'id' => $ot->id_work_order,
+                    'title' => 'OT #'.$ot->n_documento,
                     'start' => $ot->fecha_programada,
-                    'end'   => $fechaFin = \Carbon\Carbon::parse($fechaFin)->addDay()->format('Y-m-d'),
+                    'end' => $fechaFin = \Carbon\Carbon::parse($fechaFin)->addDay()->format('Y-m-d'),
                     'color' => $color,
-                    'allDay'=> true,
+                    'allDay' => true,
                     'extendedProps' => [
                         'cliente' => $ot->tercero,
                         'instalador' => $ot->instalador->nombre_instalador ?? '',
                         'pedido' => $ot->pedido,
-                        'status'     => $ot->status
-                    ]
+                        'status' => $ot->status,
+                    ],
                 ];
             }
 
@@ -1273,11 +1269,10 @@ class OrdenesTrabajoController
             \Log::error($e->getMessage());
 
             return response()->json([
-                'error' => $e->getMessage()
+                'error' => $e->getMessage(),
             ], 500);
         }
     }
-
 
     // función para mostrar el formulario de adjuntar fotos a una orden de trabajo
     public function formAdjuntarFotos($id)
@@ -1289,14 +1284,13 @@ class OrdenesTrabajoController
             ->map(function ($f) {
                 return [
                     'id' => $f->id,
-                    'url' => asset('storage/' . $f->ruta),
-                    'tipo' => $f->tipo
+                    'url' => asset('storage/'.$f->ruta),
+                    'tipo' => $f->tipo,
                 ];
             });
 
         return view('workorders.adjuntar_fotos', compact('orden', 'fotos'));
     }
-
 
     // función para guardar las fotos adjuntas a una orden de trabajo
     public function guardarFotos(Request $request, $id)
@@ -1306,7 +1300,6 @@ class OrdenesTrabajoController
             'fotos.*' => 'file|mimes:jpg,jpeg,png,mp4,mov,avi,webm|max:102400',
         ]);
 
-
         $this->orderWorkService->guardarFotos($id, $request->file('fotos'));
 
         $fotos = \App\Models\OrderWorkFotoModel::where('order_work_id', $id)
@@ -1314,7 +1307,7 @@ class OrdenesTrabajoController
             ->map(function ($f) {
                 return [
                     'id' => $f->id,
-                    'url' => asset('storage/' . $f->ruta),
+                    'url' => asset('storage/'.$f->ruta),
                     'tipo' => $f->tipo,
                 ];
             });
@@ -1325,15 +1318,13 @@ class OrdenesTrabajoController
         ]);
     }
 
-
     // función para eliminar una foto adjunta a una orden de trabajo
     public function eliminarFoto($id)
     {
         $foto = OrderWorkFotoModel::findOrFail($id);
 
-   
         // eliminar archivo físico
-         if (Storage::disk('public')->exists($foto->ruta)) {
+        if (Storage::disk('public')->exists($foto->ruta)) {
             Storage::disk('public')->delete($foto->ruta);
         }
 
@@ -1342,6 +1333,33 @@ class OrdenesTrabajoController
 
         return response()->json([
             'success' => true,
+        ]);
+    }
+
+    public function listarMateriales()
+    {
+        try {
+            return view('materiales.index');
+        } catch (\Exception $e) {
+            return response()->json(
+                [
+                    'success' => false,
+                    'message' => $e->getMessage(),
+                ],
+                500,
+            );
+        }
+    }
+
+    // función para obtener el listado de materiales disponibles (para autocompletar en el formulario)
+    public function consultarMateriales(Request $request)
+    {
+        $data = $this->productionOrderService->getAllMaterials();
+
+        return response()->json([
+            'success' => true,
+            'total' => count($data),
+            'data' => $data,
         ]);
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Services\Integrations;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 
 class WooCommerceService
 {
@@ -21,18 +22,18 @@ class WooCommerceService
 
     private function client()
     {
-        return Http::timeout(15) //  timeout general
-            ->retry(2, 1000) // reintento en caso de fallo (2 veces, 1 segundo de espera)
+        return Http::timeout(15)
+            ->retry(2, 1000)
             ->withOptions([
-                'connect_timeout' => 10, // timeout de conexión
+                'connect_timeout' => 10,
             ]);
     }
 
     // BUSCAR SKU REAL (SIMPLE O VARIATION)
     public function findProductRealBySku(string $sku): ?array
     {
-
         try {
+
             $res = $this->client()->get("{$this->url}/wp-json/wc/v3/products", [
                 'consumer_key' => $this->key,
                 'consumer_secret' => $this->secret,
@@ -46,13 +47,36 @@ class WooCommerceService
 
             $products = $res->json();
 
+            // 🔥 BUSCAR EN VARIACIONES SI NO ENCUENTRA
             if (empty($products)) {
+
+                $resVar = $this->client()->get("{$this->url}/wp-json/wc/v3/products/variations", [
+                    'consumer_key' => $this->key,
+                    'consumer_secret' => $this->secret,
+                    'per_page' => 100,
+                    'sku' => $sku,
+                ]);
+
+                if ($resVar->successful()) {
+
+                    $vars = $resVar->json();
+
+                    if (! empty($vars)) {
+                        $v = $vars[0];
+
+                        return [
+                            'type' => 'variation',
+                            'id' => $v['id'],
+                            'parent_id' => $v['parent_id'],
+                        ];
+                    }
+                }
+
                 return null;
             }
 
             $p = $products[0];
 
-            // CASO 1: ES VARIATION (ESTO ES LO QUE TE FALTABA)
             if ($p['type'] === 'variation') {
                 return [
                     'type' => 'variation',
@@ -61,7 +85,6 @@ class WooCommerceService
                 ];
             }
 
-            // CASO 2: ES SIMPLE
             if ($p['type'] === 'simple') {
                 return [
                     'type' => 'simple',
@@ -69,7 +92,6 @@ class WooCommerceService
                 ];
             }
 
-            // CASO 3: ES VARIABLE (PADRE)
             if ($p['type'] === 'variable') {
 
                 $vars = $this->client()->get("{$this->url}/wp-json/wc/v3/products/{$p['id']}/variations", [
@@ -93,6 +115,8 @@ class WooCommerceService
                 }
             }
 
+            return null;
+
         } catch (\Exception $e) {
 
             Log::error('ERROR BUSCANDO SKU', [
@@ -104,7 +128,7 @@ class WooCommerceService
         }
     }
 
-    // ACTUALIZAR SEGÚN TIPO
+    // 🔥 ACTUALIZAR STOCK (FIX REAL AQUÍ)
     public function updateStock(array $woo, int $stock)
     {
         $payload = [
@@ -116,24 +140,24 @@ class WooCommerceService
 
         try {
 
+            // 🔥 AUTH EN QUERY STRING (CLAVE DEL FIX)
+            $params = http_build_query([
+                'consumer_key' => $this->key,
+                'consumer_secret' => $this->secret,
+            ]);
+
             // VARIATION
             if ($woo['type'] === 'variation') {
                 return $this->client()->put(
-                    "{$this->url}/wp-json/wc/v3/products/{$woo['parent_id']}/variations/{$woo['id']}",
-                    array_merge($payload, [
-                        'consumer_key' => $this->key,
-                        'consumer_secret' => $this->secret,
-                    ])
+                    "{$this->url}/wp-json/wc/v3/products/{$woo['parent_id']}/variations/{$woo['id']}?{$params}",
+                    $payload
                 );
             }
 
             // SIMPLE
             return $this->client()->put(
-                "{$this->url}/wp-json/wc/v3/products/{$woo['id']}",
-                array_merge($payload, [
-                    'consumer_key' => $this->key,
-                    'consumer_secret' => $this->secret,
-                ])
+                "{$this->url}/wp-json/wc/v3/products/{$woo['id']}?{$params}",
+                $payload
             );
 
         } catch (\Exception $e) {

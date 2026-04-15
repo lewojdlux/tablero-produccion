@@ -20,6 +20,9 @@ class MaterialSyncService
         $lastId = '';
         $chunkSize = 100;
 
+        // 🔥 cache en memoria
+        $notFoundCache = [];
+
         while (true) {
 
             $materials = $this->repo->getAllMaterials($lastId, $chunkSize);
@@ -36,28 +39,33 @@ class MaterialSyncService
 
                 $lastId = $sku;
 
+                // 🔥 evitar repetir fallos
+                if (isset($notFoundCache[$sku])) {
+                    continue;
+                }
+
                 $stock = (float) $m->saldo_inventario - (float) $m->saldo_reservado;
                 $stockFinal = max(0, (int) $stock);
 
                 try {
 
-                    // BUSCAR BIEN
                     $wooData = $woo->findProductRealBySku($sku);
 
                     if (! $wooData) {
+                        $notFoundCache[$sku] = true;
+
                         Log::warning('NO EXISTE EN WOO', ['sku' => $sku]);
 
                         continue;
                     }
 
-                    // ACTUALIZAR
                     $res = $woo->updateStock($wooData, $stockFinal);
 
-                    if (! $res->successful()) {
+                    if (! $res || ! $res->successful()) {
                         Log::error('ERROR UPDATE', [
                             'sku' => $sku,
-                            'status' => $res->status(),
-                            'body' => $res->body(),
+                            'status' => $res?->status(),
+                            'body' => $res?->body(),
                         ]);
                     } else {
                         Log::info('ACTUALIZADO', [
@@ -73,9 +81,8 @@ class MaterialSyncService
                     ]);
                 }
 
-                usleep(200000); // 200ms para evitar saturar la API
+                usleep(200000); // 🔥 no saturar Woo
             }
-
         }
     }
 }

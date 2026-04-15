@@ -2,12 +2,9 @@
 
 namespace App\Repository;
 
-use Carbon\CarbonImmutable;
-
+use App\Models\ProductionOrder;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
-
-use App\Models\ProductionOrder;
 
 class ProductionRepository
 {
@@ -21,7 +18,7 @@ class ProductionRepository
 
         // Parseo robusto del datepicker (prioriza dd/mm/aaaa)
         $parse = function (?string $s) {
-            if (!$s) {
+            if (! $s) {
                 return null;
             }
             foreach (['d/m/Y', 'Y-m-d', 'd-m-Y', 'm/d/Y', 'Y/m/d', 'Ymd'] as $fmt) {
@@ -37,8 +34,8 @@ class ProductionRepository
             }
         };
 
-        $start = !empty($filters['start']) ? $parse($filters['start'])?->startOfDay() : null;
-        $end = !empty($filters['end']) ? $parse($filters['end'])?->endOfDay() : null;
+        $start = ! empty($filters['start']) ? $parse($filters['start'])?->startOfDay() : null;
+        $end = ! empty($filters['end']) ? $parse($filters['end'])?->endOfDay() : null;
         if ($start && $end && $end->lt($start)) {
             [$start, $end] = [$end, $start];
         }
@@ -70,11 +67,11 @@ class ProductionRepository
             $eM = $end?->month;
 
             // Si falta alguno, completa con el otro extremo
-            if (!$start && $end) {
+            if (! $start && $end) {
                 $sY = $eY;
                 $sM = 1;
             } // desde enero del año fin
-            if ($start && !$end) {
+            if ($start && ! $end) {
                 $eY = $sY;
                 $eM = 12;
             } // hasta dic del año inicio
@@ -109,13 +106,13 @@ class ProductionRepository
         }
 
         // Filtros opcionales
-        $q->when(!empty($filters['asesor']) && strlen($filters['asesor']) >= 2, fn($qq) => $qq->where('tv.StrNombre', 'like', '%' . $filters['asesor'] . '%'))
-            ->when(!empty($filters['cliente']) && strlen($filters['cliente']) >= 2, fn($qq) => $qq->where('tc.StrNombre', 'like', '%' . $filters['cliente'] . '%'))
-            ->when(!empty($filters['pedido']), fn($qq) => $qq->where('t.IntPedido', $filters['pedido']));
+        $q->when(! empty($filters['asesor']) && strlen($filters['asesor']) >= 2, fn ($qq) => $qq->where('tv.StrNombre', 'like', '%'.$filters['asesor'].'%'))
+            ->when(! empty($filters['cliente']) && strlen($filters['cliente']) >= 2, fn ($qq) => $qq->where('tc.StrNombre', 'like', '%'.$filters['cliente'].'%'))
+            ->when(! empty($filters['pedido']), fn ($qq) => $qq->where('t.IntPedido', $filters['pedido']));
 
         $rows = $q
             ->selectRaw(
-                "
+                '
                 t.IntTransaccion as TipoTransaccion,
                 t.IntDocumento   as Ndocumento,
                 t.IntPedido      as Pedido,
@@ -128,7 +125,7 @@ class ProductionRepository
                 t.DatFecha       as FechaOrdenProduccion,
                 tv.StrIdVendedor  as VendedorUsername
 
-            ",
+            ',
             )
             ->groupBy('t.IntTransaccion', 't.IntDocumento', 't.IntPedido', 'tc.StrNombre', 'tv.StrNombre', 't.StrObservaciones', 't.IntPeriodo', 't.IntAno', 't.DatFecha', 'tv.StrIdVendedor')
             ->orderBy('t.IntAno', 'DESC')
@@ -136,7 +133,7 @@ class ProductionRepository
             ->orderBy('t.IntDocumento', 'DESC')
             ->get();
 
-        return $rows->map(fn($r) => (array) $r)->toArray();
+        return $rows->map(fn ($r) => (array) $r)->toArray();
     }
 
     // Detalle de OP (109) con posible enlace a factura (104) y su estado, sin filtrar por producto en el detalle. Si no se encuentra el documento, devuelve header vacío y lines vacío.
@@ -252,7 +249,7 @@ class ProductionRepository
             ->where('t.IntDocumento', $ndoc)
             ->where('t.IntEstado', 0)
             ->selectRaw(
-                "
+                '
             t.DatFecha               as FechaFicha,
             t.IntDocumento          as FichaDocumento,
             t.IntPedido             as PedidoAsociadoFicha,
@@ -263,11 +260,11 @@ class ProductionRepository
             ptc.StrNombre           as ClienteEnsamble,
             ptv.StrNombre           as VendedorEnsamble,
             p.DatFecha              as FechaEnsamble
-        ",
+        ',
             )
             ->first();
 
-        if (!$headerRow) {
+        if (! $headerRow) {
             return ['header' => [], 'lines' => []];
         }
 
@@ -280,7 +277,7 @@ class ProductionRepository
             ->orderBy('td.StrProducto')
             ->get()
             ->map(
-                fn($r) => [
+                fn ($r) => [
                     'DetalleDocumento' => $r->DetalleDocumento,
                     'Luminaria' => $r->Producto,
                     'Cantidad' => $r->Cantidad,
@@ -346,12 +343,12 @@ class ProductionRepository
                 $current = json_decode($existing->luminaria, true);
 
                 // Si aún no es array, inicializar
-                if (!is_array($current)) {
+                if (! is_array($current)) {
                     $current = [];
                 }
 
                 // Agregar luminaria si no está repetida
-                if (!in_array($r['Luminaria'], $current)) {
+                if (! in_array($r['Luminaria'], $current)) {
                     $current[] = $r['Luminaria'];
 
                     $existing->update([
@@ -395,10 +392,11 @@ class ProductionRepository
     {
         $today = Carbon::now()->format('ymd'); // 250829
         $seq = ProductionOrder::whereDate('created_at', Carbon::today())->count() + 1;
+
         return sprintf('%s-%04d', $today, $seq); // 250829-0007
     }
 
-    /*   PARA O.T   */ /////
+    /*   PARA O.T */ // ///
     /*public function searchOrdersVentas(array $filters)
     {
         $ano = isset($filters['ano']) && (int) $filters['ano'] > 0 ? (int) $filters['ano'] : (int) now()->year;
@@ -544,7 +542,7 @@ class ProductionRepository
 
         // Parseo robusto del datepicker (prioriza dd/mm/aaaa)
         $parse = function (?string $s) {
-            if (!$s) {
+            if (! $s) {
                 return null;
             }
             foreach (['d/m/Y', 'Y-m-d', 'd-m-Y', 'm/d/Y', 'Y/m/d', 'Ymd'] as $fmt) {
@@ -560,8 +558,8 @@ class ProductionRepository
             }
         };
 
-        $start = !empty($filters['start']) ? $parse($filters['start'])?->startOfDay() : null;
-        $end = !empty($filters['end']) ? $parse($filters['end'])?->endOfDay() : null;
+        $start = ! empty($filters['start']) ? $parse($filters['start'])?->startOfDay() : null;
+        $end = ! empty($filters['end']) ? $parse($filters['end'])?->endOfDay() : null;
         if ($start && $end && $end->lt($start)) {
             [$start, $end] = [$end, $start];
         }
@@ -585,11 +583,11 @@ class ProductionRepository
             $eM = $end?->month;
 
             // Si falta alguno, completa con el otro extremo
-            if (!$start && $end) {
+            if (! $start && $end) {
                 $sY = $eY;
                 $sM = 1;
             } // desde enero del año fin
-            if ($start && !$end) {
+            if ($start && ! $end) {
                 $eY = $sY;
                 $eM = 12;
             } // hasta dic del año inicio
@@ -624,9 +622,9 @@ class ProductionRepository
         }
 
         // Filtros opcionales
-        $q->when(!empty($filters['asesor']), fn($qq) => $qq->where('tv.StrNombre', 'like', "%{$filters['asesor']}%"))
-            ->when(!empty($filters['cliente']), fn($qq) => $qq->where('tc.StrNombre', 'like', "%{$filters['cliente']}%"))
-            ->when(!empty($filters['pedido']), fn($qq) => $qq->where('t.IntDocumento', $filters['pedido']));
+        $q->when(! empty($filters['asesor']), fn ($qq) => $qq->where('tv.StrNombre', 'like', "%{$filters['asesor']}%"))
+            ->when(! empty($filters['cliente']), fn ($qq) => $qq->where('tc.StrNombre', 'like', "%{$filters['cliente']}%"))
+            ->when(! empty($filters['pedido']), fn ($qq) => $qq->where('t.IntDocumento', $filters['pedido']));
 
         // Selección optimizada
         $rows = $q
@@ -637,7 +635,7 @@ class ProductionRepository
             ->orderByDesc('t.IntDocumento')
             ->get();
 
-        return $rows->map(fn($r) => (array) $r)->toArray();
+        return $rows->map(fn ($r) => (array) $r)->toArray();
     }
 
     // Detalle de OP (109) con posible enlace a factura (104) y su estado, filtrando por producto específico en el detalle. Si no se encuentra el documento, devuelve header vacío y lines vacío.
@@ -710,7 +708,7 @@ class ProductionRepository
             ->where('t.IntDocumento', $ndoc)
             ->where('t.IntEstado', 0)
             ->selectRaw(
-                "
+                '
                     t.DatFecha as FechaFicha,
                     t.IntDocumento as FichaDocumento,
                     t.IntPedido as PedidoAsociadoFicha,
@@ -721,11 +719,11 @@ class ProductionRepository
                     ptc.StrNombre as ClienteEnsamble,
                     ptv.StrNombre as VendedorEnsamble,
                     p.DatFecha as FechaEnsamble
-                ",
+                ',
             )
             ->first();
 
-        if (!$headerRow) {
+        if (! $headerRow) {
             return ['header' => [], 'lines' => []];
         }
 
@@ -740,7 +738,7 @@ class ProductionRepository
                 ->orderBy('StrProductoSecundario')
                 ->get()
                 ->map(
-                    fn($r) => [
+                    fn ($r) => [
                         'Producto' => $r->Producto,
                         'Cantidad' => (float) $r->Cantidad,
                     ],
@@ -778,7 +776,7 @@ class ProductionRepository
 
             //  UNA factura por pedido
             ->leftJoin(
-                \DB::raw("
+                \DB::raw('
                 (
                     SELECT
                         IntDocRefD,
@@ -787,17 +785,16 @@ class ProductionRepository
                     WHERE IntTransaccion = 104
                     GROUP BY IntDocRefD
                 ) d
-            "),
+            '),
                 'd.IntDocRefD',
                 '=',
                 't.IntDocumento',
             )
 
-            //Excluir ya asignados
-            ->when(!empty($documentosAsignados), function ($q) use ($documentosAsignados) {
+            // Excluir ya asignados
+            ->when(! empty($documentosAsignados), function ($q) use ($documentosAsignados) {
                 $q->whereNotIn('t.IntDocumento', $documentosAsignados);
             })
-
 
             // FILTRO AUTOMÁTICO POR ASESOR LOGUEADO
             ->when($vendedor, function ($q) use ($vendedor) {
@@ -815,7 +812,6 @@ class ProductionRepository
 
             ->where('t.IntTransaccion', 109)
             ->where('t.IntEstado', 0)
-
 
             //  Solo pedidos que tengan aplicado servicio de instalación
             /*->whereExists(function ($q) {
@@ -857,19 +853,65 @@ class ProductionRepository
             ->orderByDesc('t.IntPeriodo')
             ->orderByDesc('t.IntDocumento');
 
-             // ─── DEBUG LOG ───────────────────────────────────────────
-            \Log::info('getOrdenesTrabajo DEBUG', [
-                'search'               => $search,
-                'vendedor'             => $vendedor,
-                'documentos_asignados' => $documentosAsignados,
-                'sql'                  => $query->toSql(),
-                'bindings'             => $query->getBindings(),
-                'total_results'        => $query->count(),
-            ]);
+        // ─── DEBUG LOG ───────────────────────────────────────────
+        \Log::info('getOrdenesTrabajo DEBUG', [
+            'search' => $search,
+            'vendedor' => $vendedor,
+            'documentos_asignados' => $documentosAsignados,
+            'sql' => $query->toSql(),
+            'bindings' => $query->getBindings(),
+            'total_results' => $query->count(),
+        ]);
 
         // AQUÍ ESTABA EL PROBLEMA
-        //return $search ? $query->get() : $query->paginate(50); //  paginado
+        // return $search ? $query->get() : $query->paginate(50); //  paginado
         return $query->paginate(50)->withQueryString();
-            
+
+    }
+
+    // función para obtener el listado completo de materiales (sin paginar)
+    public function buscarMateriales()
+    {
+        return DB::connection('sqlsrv')->select("
+        SELECT 
+            p.StrIdProducto AS codigo,
+            p.StrDescripcion AS nombre,
+            p.StrParam1 AS ubicacion,
+
+            ISNULL(inv.saldo_inventario,0) AS saldo_inventario,
+            ISNULL(res.saldo_reservado,0) AS saldo_reservado,
+
+            -- RESTA DIRECTA EN SQL
+            ISNULL(inv.saldo_inventario,0) - ISNULL(res.saldo_reservado,0) AS saldo_disponible
+
+        FROM TblProductos p WITH (NOLOCK)
+
+        -- INVENTARIO
+        LEFT JOIN (
+            SELECT 
+                s.StrProducto,
+                SUM(s.IntSaldoI + s.IntEntradas - s.IntSalidas - s.IntSalidasT) AS saldo_inventario
+            FROM QrySaldosInv1 s WITH (NOLOCK)
+            WHERE s.IntBodega = '01'
+            AND s.IntAno = YEAR(GETDATE())
+            AND s.IntPeriodo = MONTH(GETDATE())
+            AND s.IntEmpresa = '01'
+            GROUP BY s.StrProducto
+        ) inv ON inv.StrProducto = p.StrIdProducto
+
+        -- RESERVAS
+        LEFT JOIN (
+            SELECT 
+                sp.StrProducto,
+                SUM(CASE WHEN sp.IntSaldoFinal > 0 THEN sp.IntSaldoFinal ELSE 0 END) AS saldo_reservado
+            FROM QrySaldoPedidos sp WITH (NOLOCK)
+            WHERE sp.IntTransaccion = 109
+            AND sp.IntPeriodo = MONTH(GETDATE())
+            AND sp.IntAno = YEAR(GETDATE())
+            GROUP BY sp.StrProducto
+        ) res ON res.StrProducto = p.StrIdProducto
+
+        ORDER BY p.StrIdProducto
+    ");
     }
 }
